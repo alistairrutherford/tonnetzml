@@ -31,6 +31,8 @@ compile_and_run () {
 }
 
 compile_and_run test_rig
+compile_and_run test_lattice
+compile_and_run test_ops
 
 echo ""
 echo "All test binaries passed."
