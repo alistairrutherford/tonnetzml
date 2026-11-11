@@ -10,6 +10,8 @@
 //   Operator           operator key `index` (0..11: P L R N S H +5 -5 +M3 -M3 Undo Home), as a
 //                      ghost-neighbour click: what the key would do, whether or not the zone is on
 //   SetWalk            Walk / Explore's W replaced (the word bar: a chip dragged or dropped off)
+//   AuditionOn / Off   (Phase 6) a note for Preview tone only: a hovered ghost heard, never sent
+//                      as MIDI, never gathered
 //
 // Plain C++, no JUCE.
 #pragma once
@@ -21,7 +23,7 @@
 
 namespace tonnetz
 {
-    enum class EditorCommandType : uint8_t { NoteOn, NoteOff, Operator, SetWalk };
+    enum class EditorCommandType : uint8_t { NoteOn, NoteOff, Operator, SetWalk, AuditionOn, AuditionOff };
 
     struct EditorCommand
     {
@@ -44,6 +46,12 @@ namespace tonnetz
             EditorCommand c;
             c.type = EditorCommandType::NoteOff;
             c.note = (uint8_t) (note & 127);
+            return c;
+        }
+        static EditorCommand audition (int note, bool on, int velocity = 90) noexcept
+        {
+            EditorCommand c = on ? noteOn (note, velocity) : noteOff (note);
+            c.type = on ? EditorCommandType::AuditionOn : EditorCommandType::AuditionOff;
             return c;
         }
         static EditorCommand operatorKey (int index) noexcept

@@ -68,7 +68,7 @@ namespace tonnetz
         ui::Header head;
         ui::Settings side;
         juce::TooltipWindow tooltips { this, 600 };
-        uint32_t lastReleases = 0;
+        uint32_t lastReleases = 0, seenViewRestores = 0;
         bool haveReleases = false, constructed = false;
         int ticks = 0;
         double lastTick = 0.0;

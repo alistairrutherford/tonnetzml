@@ -52,6 +52,12 @@
 //               signature; Capture and Capture source saved with the state; no allocation in
 //               processBlock while capturing
 //
+//  16. finish   (Phase 6) Preview tone: silent when off or bypassed, sounds what goes out when on,
+//               hover audition heard but never sent, no allocation; Flip, Pivot and Grow from
+//               the lattice (clicks on the generated chord's edges and nodes) and Shrink from
+//               the palette edit W; the editor's view (camera, zoom, theme, Follow, Sticky…)
+//               saved and restored, into a new instance and into an open editor
+//
 //   TonnetzMLSnapshot <fixtures dir> <output dir> [--update | --no-pixels]
 //
 // --update writes new reference images. --no-pixels renders without comparing. The images of
@@ -449,8 +455,9 @@ namespace
             if (auto* withId = dynamic_cast<juce::AudioProcessorParameterWithID*> (param))
                 ids.add (withId->getParameterID());
         check (ids.joinIntoString (" ") == "enable testRig slot gatherMs mix sourceChannel genChannel register bass octave "
-                                           "mode latch walkInput orbitCycle orbitRate opZoneStart opZoneOn key keyTonic keyMinor inKey capture captureSource",
-               juce::String (ids.size()) + " parameters (at most 28), Phase 2's, 3's and 5's appended in turn: " + ids.joinIntoString (" "));
+                                           "mode latch walkInput orbitCycle orbitRate opZoneStart opZoneOn key keyTonic keyMinor inKey capture captureSource previewTone",
+               juce::String (ids.size()) + " parameters (at most 28), Phase 2's, 3's, 5's and 6's appended in turn: " + ids.joinIntoString (" "));
+        check (plain (p, params::previewTone) == 0.0f, "Preview tone is off by default in a host (the Standalone turns it on)");
         check (plain (p, params::capture) == 0.0f && plain (p, params::captureSource) == 0.0f, "Phase 5 defaults: Capture off, Capture source off");
         check (plain (p, params::mode) == 0.0f && plain (p, params::latch) == 0.0f && plain (p, params::walkInput) == 0.0f
                    && plain (p, params::orbitCycle) == 0.0f && plain (p, params::orbitRate) == 2.0f && plain (p, params::opZoneStart) == 24.0f
@@ -1307,7 +1314,7 @@ namespace
                 ranged->setValueNotifyingHost (before);
                 c->refresh();
             }
-            check (found == total && total == 23, juce::String (size.first) + " x " + juce::String (size.second) + ": every parameter has a control ("
+            check (found == total && total == 24, juce::String (size.first) + " x " + juce::String (size.second) + ": every parameter has a control ("
                    + juce::String (found) + "/" + juce::String (total) + ") " + missing.joinIntoString (" "));
             check (inside == total && works == total, "each is visible, inside the window at its full width, and a click changes it " + broken.joinIntoString (" "));
 
@@ -1756,6 +1763,205 @@ namespace
         }
         check (allocations == 0, "no allocation in processBlock while capturing (" + juce::String (allocations) + ")");
     }
+
+    //==========================================================================
+    // Phase 6: Preview tone, free ops from the lattice, the view in the state.
+
+    void testFinish (const juce::File& fixtures, const juce::File& output)
+    {
+        std::cout << "finish" << std::endl;
+
+        // Preview tone: off is silent, on sounds what goes out; bypass silences it.
+        {
+            MiniHost h;
+            setPlain (*h.p, params::gatherMs, 0.0f);
+            h.process (chordOn ({ 60, 64, 67 }));
+            h.process();
+            check (h.peak == 0.0f, "Preview tone off: the output is silent while a chord sounds");
+            set (*h.p, params::previewTone, true);
+            h.peak = 0.0f;
+            h.process (chordOn ({ 72 }));
+            for (int i = 0; i < 20; ++i)
+                h.process();
+            check (h.peak > 0.05f && h.peak < 1.0f, "Preview tone on: the generated notes are heard (peak " + juce::String (h.peak, 3) + ")");
+            h.bypassed = true;
+            h.process();
+            h.peak = 0.0f;
+            h.process();
+            check (h.peak == 0.0f, "bypassed: silent");
+            h.bypassed = false;
+
+            int allocations = 0;
+            for (int round = 0; round < 40; ++round)
+            {
+                const auto on = chordOn ({ 48 + round % 12, 52 + round % 12, 55 + round % 12 });
+                juce::MidiBuffer off;
+                for (int n : { 48 + round % 12, 52 + round % 12, 55 + round % 12 })
+                    off.addEvent (juce::MidiMessage::noteOff (1, n), 10);
+                AllocWatch watch;
+                allocCount = 0;
+                h.process (on);
+                h.process ();
+                h.process (off);
+                allocations += allocCount.load();
+            }
+            check (allocations == 0, "no allocation in processBlock with Preview tone on (" + juce::String (allocations) + ")");
+        }
+
+        // Walk on C E G (operator keys off), Preview tone on: hovering a ghost is heard, not sent;
+        // free ops from the lattice.
+        MiniHost h;
+        setPlain (*h.p, params::gatherMs, 0.0f);
+        setPlain (*h.p, params::mode, 1.0f);
+        set (*h.p, params::opZoneOn, false);
+        set (*h.p, params::previewTone, true);
+        h.p->getState().getParameter (params::key)->setValueNotifyingHost (0.0f);
+        std::unique_ptr<juce::AudioProcessorEditor> e (h.p->createEditor());
+        auto& ed = editorOf (e);
+        ed.freezeAnimation (true);
+        ed.setVisible (true);
+        ed.setSize (1200, 800);
+        h.process (chordOn ({ 60, 64, 67 }));
+        h.process();
+        ed.refreshNow();
+        auto& lat = ed.latticeView();
+        lat.recentre();
+        ed.refreshNow();
+
+        int ghostL = -1;
+        for (int i = 0; i < (int) ed.model().ghosts.size(); ++i)
+            if (ed.model().ghosts[(size_t) i].label == "L")
+                ghostL = i;
+        const size_t sentBefore = h.notes.size();
+        lat.hoverAt_ (lat.ghostChipCentre (ghostL));
+        const auto heard = lat.auditioning();
+        h.peak = 0.0f;
+        for (int i = 0; i < 8; ++i)
+            h.process();
+        check (heard == std::vector<int> { 59, 64, 67 } && h.notes.size() == sentBefore,
+               "hovering the L ghost auditions E minor (B E G, common tones kept) through Preview tone and sends nothing");
+        lat.hoverAt_ ({ 3.0f, 3.0f });
+        check (lat.auditioning().empty(), "moving off it stops the audition");
+
+        // The free ops on C major: three pivots, three flips, three grows.
+        int pivots = 0, flips = 0, grows = 0, flipCG = -1, growEG = -1, pivotE = -1;
+        const auto& lops = lat.latticeOps();
+        for (int i = 0; i < (int) lops.size(); ++i)
+        {
+            const auto& lo = lops[(size_t) i];
+            pivots += lo.kind == ui::LatticeView::LatticeOp::pivot;
+            flips += lo.kind == ui::LatticeView::LatticeOp::flip;
+            grows += lo.kind == ui::LatticeView::LatticeOp::grow;
+            const auto pcs = std::set<int> { pitchClass (lo.u), pitchClass (lo.v) };
+            if (lo.kind == ui::LatticeView::LatticeOp::flip && pcs == std::set<int> { 0, 7 }) flipCG = i;
+            if (lo.kind == ui::LatticeView::LatticeOp::grow && pcs == std::set<int> { 4, 7 }) growEG = i;
+            if (lo.kind == ui::LatticeView::LatticeOp::pivot && pitchClass (lo.u) == 4) pivotE = i;
+        }
+        check (pivots == 3 && flips == 3 && grows == 3, "C major offers 3 pivots, 3 flips (its edges) and 3 grows ("
+               + juce::String (pivots) + ", " + juce::String (flips) + ", " + juce::String (grows) + ")");
+
+        const auto wordNow = [&]
+        {
+            h.process();
+            h.process();
+            ed.refreshNow();
+            return juce::String (printWord (h.p->getEngineStatus().current).c_str());
+        };
+        const auto generatedPcs = [&] { return pcsOfMask (h.p->getEngineStatus().generated.mask); };
+
+        // A click in the middle of the C–G edge flips through it: C E♭ G (as P).
+        if (flipCG >= 0)
+            lat.mouseDown (mouseAt (lat, lat.latticeOpCentre (flipCG), leftButton));
+        lat.mouseUp (mouseAt (lat, {}, leftButton));
+        check (flipCG >= 0 && wordNow() == "Flip(0,7)" && generatedPcs() == std::set<int> { 0, 3, 7 },
+               juce::String::fromUTF8 ("a click on the C\xe2\x80\x93G edge appends Flip(0,7): C minor (") + juce::String (printWord (h.p->getEngineStatus().current).c_str()) + ")");
+        // Undo, then Grow across E–G from the + node: Cmaj7; Shrink from the palette: C again.
+        ed.wordBar().undo();
+        wordNow();
+        int grow = -1;
+        for (int i = 0; i < (int) lat.latticeOps().size(); ++i)
+            if (lat.latticeOps()[(size_t) i].kind == ui::LatticeView::LatticeOp::grow
+                && std::set<int> { pitchClass (lat.latticeOps()[(size_t) i].u), pitchClass (lat.latticeOps()[(size_t) i].v) } == std::set<int> { 4, 7 })
+                grow = i;
+        juce::ignoreUnused (growEG);
+        if (grow >= 0)
+            lat.mouseDown (mouseAt (lat, lat.latticeOpCentre (grow), leftButton));
+        lat.mouseUp (mouseAt (lat, {}, leftButton));
+        const auto grown = wordNow();
+        check (grow >= 0 && grown == "Grow(4,7)" && generatedPcs() == std::set<int> { 0, 4, 7, 11 },
+               juce::String::fromUTF8 ("a click on the + node across E\xe2\x80\x93G appends Grow(4,7): Cmaj7 (") + grown + ", " + juce::String ((int) generatedPcs().size()) + " tones)");
+        compareImage (editorImage (ed, 1200, 800), "finish_walk_grow_paper_1200x800", fixtures, output);
+        ed.wordBar().appendOp (Op::shrink());
+        check (wordNow() == "" && generatedPcs() == std::set<int> { 0, 4, 7 }, juce::String::fromUTF8 ("Shrink (the palette's \xe2\x88\x92g) takes it back: Grow Shrink reduces to nothing, C major"));
+        ed.wordBar().openPalette();
+        bool shrinkInPalette = false;
+        if (auto* pal = ed.wordBar().palette())
+            shrinkInPalette = pal->count() == 13;
+        check (shrinkInPalette, "the palette has Shrink");
+        // A pivot on E: E stays, C and G reflect through it (G\xe2\x99\xaf, C\xe2\x99\xaf).
+        wordNow();
+        for (int i = 0; i < (int) lat.latticeOps().size(); ++i)
+            if (lat.latticeOps()[(size_t) i].kind == ui::LatticeView::LatticeOp::pivot && pitchClass (lat.latticeOps()[(size_t) i].u) == 4)
+                pivotE = i;
+        if (pivotE >= 0)
+            lat.clickLatticeOp (pivotE);
+        check (wordNow() == "Pivot(4)" && generatedPcs() == std::set<int> { 1, 4, 8 }, juce::String::fromUTF8 ("Pivot on E appends Pivot(4): C and G reflect through E, C\xe2\x99\xaf minor (") + juce::String (printWord (h.p->getEngineStatus().current).c_str()) + ")");
+        // In Orbit with a factory cycle the word can't be edited: no free ops there.
+        setPlain (*h.p, params::mode, 2.0f);
+        ed.refreshNow();
+        check (lat.latticeOpAt (lat.latticeOpCentre (0)) == -1, "Orbit (a factory cycle): the free ops are not offered");
+
+        // The view in the state: camera, zoom, theme, Follow, Sticky, settings, the keyboard's octave.
+        {
+            TonnetzProcessor a;
+            auto& v = a.editorView();
+            v.dark = true;
+            v.follow = false;
+            v.sticky = false;
+            v.showSettings = false;
+            v.zoom = 1.7;
+            v.centreA = 3.25;
+            v.centreB = -2.5;
+            v.computerOctave = 3;
+            juce::MemoryBlock saved;
+            a.getStateInformation (saved);
+            TonnetzProcessor b;
+            b.setStateInformation (saved.getData(), (int) saved.getSize());
+            const auto& w = b.editorView();
+            check (w.dark && ! w.follow && ! w.sticky && ! w.showSettings && w.zoom == 1.7 && w.centreA == 3.25 && w.centreB == -2.5 && w.computerOctave == 3,
+                   "the editor's view comes back in a new instance: camera, zoom, theme, Follow, Sticky, settings, the keys' octave");
+            check (! b.getState().state.getChildWithName ("VIEW").isValid(), "the view is not left in the parameter tree");
+
+            // Into an open editor: it takes the camera.
+            TonnetzProcessor c;
+            std::unique_ptr<juce::AudioProcessorEditor> ce (c.createEditor());
+            auto& ced = editorOf (ce);
+            ced.freezeAnimation (true);
+            c.setStateInformation (saved.getData(), (int) saved.getSize());
+            ced.refreshNow();
+            const auto& cam = ced.latticeView().geometry().camera();
+            check (std::abs (cam.a - 3.25) < 1.0e-9 && std::abs (cam.b + 2.5) < 1.0e-9,
+                   "restored into an open editor: its lattice takes the camera");
+
+            // A state from before Phase 6 (no VIEW) leaves the view alone; damaged values are ignored.
+            auto xml = juce::AudioProcessor::getXmlFromBinary (saved.getData(), (int) saved.getSize());
+            xml->getChildByName ("VIEW")->setAttribute ("zoom", "1e300");
+            xml->getChildByName ("VIEW")->setAttribute ("centreA", "nan");
+            juce::MemoryBlock bad;
+            juce::AudioProcessor::copyXmlToBinary (*xml, bad);
+            TonnetzProcessor d;
+            d.setStateInformation (bad.getData(), (int) bad.getSize());
+            check (d.editorView().zoom == 1.0 && d.editorView().centreA == EditorView().centreA && d.editorView().centreB == -2.5,
+                   "a damaged zoom or camera value falls back to its default, the rest is kept");
+            xml->removeChildElement (xml->getChildByName ("VIEW"), true);
+            juce::MemoryBlock old;
+            juce::AudioProcessor::copyXmlToBinary (*xml, old);
+            TonnetzProcessor f;
+            f.editorView().zoom = 2.0;
+            f.setStateInformation (old.getData(), (int) old.getSize());
+            check (f.editorView().zoom == 2.0, "a state from before Phase 6 (no VIEW) leaves the view as it was");
+        }
+    }
 }
 
 int main (int argc, char* argv[])
@@ -1783,6 +1989,7 @@ int main (int argc, char* argv[])
     testKeyOnLattice();
     testEditorRealtime();
     testCapture (fixtures, output);
+    testFinish (fixtures, output);
     testThrough();
     testRig (output);
     testParams();

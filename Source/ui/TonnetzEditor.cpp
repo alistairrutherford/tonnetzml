@@ -21,6 +21,9 @@ namespace tonnetz
         addAndMakeVisible (word);
         addAndMakeVisible (head);
         addAndMakeVisible (side);
+        // Free ops from the lattice (Phase 6) go where the word bar's do.
+        lattice.canEditWord = [this] { return word.editable(); };
+        lattice.appendOp = [this] (const Op& op) { word.appendOp (op); };
         lattice.onFocusWanted = [this]
         {
             if (auto* pal = word.palette())
@@ -32,6 +35,7 @@ namespace tonnetz
         setResizeLimits (minWidth, minHeight, 2400, 1600);
         setSize (minWidth, minHeight);
         constructed = true;
+        seenViewRestores = processor.editorViewRestores();
         refreshNow();
         resized();
         lastTick = juce::Time::getMillisecondCounterHiRes() * 0.001;
@@ -122,6 +126,14 @@ namespace tonnetz
             keyboard.refresh();
             word.refresh();
             head.refresh();
+        }
+        // A restored state brought a view (Phase 6): take its camera, theme and layout.
+        if (processor.editorViewRestores() != seenViewRestores)
+        {
+            seenViewRestores = processor.editorViewRestores();
+            lattice.viewRestored();
+            layoutFloating();
+            themeChanged();
         }
         // The capture (Phase 5): taken from the audio thread here too, so the strip keeps up.
         processor.pollCapture();

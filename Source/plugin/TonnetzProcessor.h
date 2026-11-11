@@ -15,12 +15,14 @@
 #include "../core/engine/EditorCommands.h"
 #include "../core/engine/LatticeEngine.h"
 #include "../core/engine/MidiEvents.h"
+#include "../core/engine/PreviewVoice.h"
 #include "../core/engine/SnapshotExchange.h"
 #include "../core/engine/TestRig.h"
 #include "../core/engine/Transport.h"
 #include "../core/midiio/CaptureModel.h"
 #include "../core/midiio/CaptureQueue.h"
 #include <atomic>
+#include <optional>
 
 namespace tonnetz
 {
@@ -52,8 +54,11 @@ namespace tonnetz
         // Phase 5 (appended).
         inline constexpr const char* capture = "capture";
         inline constexpr const char* captureSource = "captureSource";
+        // Phase 6 (appended).
+        inline constexpr const char* previewTone = "previewTone";
 
-        juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
+        // `standalone`: Preview tone defaults on (the app has nothing routed), off in a host.
+        juce::AudioProcessorValueTreeState::ParameterLayout createLayout (bool standalone = false);
     }
 
     // The eight slot words (A–H).
@@ -163,6 +168,8 @@ namespace tonnetz
         // Queues a command for the audio thread (EditorCommands.h): false if the queue is full.
         bool sendEditorCommand (const EditorCommand& c) noexcept { return editorCommands.push (c); }
         EditorView& editorView() noexcept { return view; }
+        // Bumped when a restored state replaced the view (the open editor re-reads it).
+        uint32_t editorViewRestores() const noexcept { return viewRestores; }
 
         //======================================================================
         // The test rig (PLAN.md §7.3). Message thread.
@@ -203,7 +210,8 @@ namespace tonnetz
 
     private:
         static BusesProperties makeBuses();
-        void timerCallback() override { followKeyMode(); pollCapture(); pollTestRig(); }
+        void timerCallback() override { followKeyMode(); pollCapture(); syncView(); pollTestRig(); }
+        void syncView();
         void run (juce::AudioBuffer<float>&, juce::MidiBuffer&, bool bypassed);
         Transport readTransport();
 
@@ -238,6 +246,10 @@ namespace tonnetz
         std::atomic<float>* inKeyParam = nullptr;
         std::atomic<float>* captureParam = nullptr;
         std::atomic<float>* captureSourceParam = nullptr;
+        std::atomic<float>* previewParam = nullptr;
+        PreviewVoice preview;               // audio thread
+        BlockEvents previewEvents;
+        bool previewWasOn = false;
         uint32_t restoredSeq = 0;           // audio thread: the last WalkRestore taken
         EngineStatus status;                // audio thread: filled every block
         Transport lastTransport;
@@ -251,7 +263,13 @@ namespace tonnetz
 
         // Message thread → audio thread.
         EditorCommandFifo editorCommands;
-        EditorView view;
+        EditorView view;                    // message thread
+        // The view for a state saved from another thread, and one restored from another thread
+        // (both under viewLock; the timer keeps the one and applies the other).
+        juce::CriticalSection viewLock;
+        EditorView viewSaved;
+        std::optional<EditorView> viewPending;
+        uint32_t viewRestores = 0;
         SnapshotExchange<RigKeys> rigKeysForAudio;
         SnapshotExchange<SlotWords> slotWordsForAudio;
         SnapshotExchange<WalkRestore> walkForAudio;

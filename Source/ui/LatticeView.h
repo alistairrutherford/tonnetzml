@@ -57,6 +57,31 @@ namespace tonnetz::ui
         bool ghostsClickable() const;
         std::optional<Triangle> heldTriangle() const { return held; }
 
+        // Free ops on the generated chord (Phase 6): click one of its nodes to Pivot on it, the
+        // middle of one of its edges to Flip through it, a node across an edge (marked +) to
+        // Grow across it. Appended to W where the word bar can edit it.
+        struct LatticeOp
+        {
+            enum Kind : uint8_t { pivot, flip, grow } kind = pivot;
+            Op op;
+            double a = 0.0, b = 0.0;          // where it is clicked (lattice coordinates)
+            Vec u, v;                         // the node (pivot, grow) / the edge's ends (flip, grow)
+            PcMask result = 0;
+            juce::String description;         // "Pivot on E → A minor"
+        };
+        const std::vector<LatticeOp>& latticeOps() const noexcept { return lops; }
+        int latticeOpAt (juce::Point<float>) const;
+        bool clickLatticeOp (int index);       // false if it can't be clicked here
+        juce::Point<float> latticeOpCentre (int index) const { return screen (lops[(size_t) index].a, lops[(size_t) index].b); }
+        std::function<bool()> canEditWord;     // the word bar's editable()
+        std::function<void (const Op&)> appendOp;
+
+        // Hover audition (Phase 6): what is heard through Preview tone (pitches), for tests.
+        const std::vector<int>& auditioning() const noexcept { return auditioned; }
+        void hoverAt_ (juce::Point<float> p);  // what moving the mouse there does
+        // A restored state replaced the view: take its camera.
+        void viewRestored();
+
         void paint (juce::Graphics&) override;
         void resized() override;
         void mouseDown (const juce::MouseEvent&) override;
@@ -88,6 +113,11 @@ namespace tonnetz::ui
         void drawPath (juce::Graphics&);
         void drawCycle (juce::Graphics&);
         void drawTip (juce::Graphics&);
+        void drawLatticeOps (juce::Graphics&);
+        void rebuildLatticeOps();
+        bool opsEditable() const;
+        void audition (PcMask mask);
+        std::vector<int> voiceLikeGenerated (PcMask mask) const;
         juce::Point<float> screen (double a, double b) const { const auto p = geo.toScreen (a, b); return { (float) p.x, (float) p.y }; }
         juce::Point<float> screen (Vec v) const { return screen ((double) v.a, (double) v.b); }
 
@@ -117,6 +147,11 @@ namespace tonnetz::ui
         juce::Point<float> hoverAt;
         bool hovering = false;
         int hoverGhost = -1;
+        int hoverOp = -1;
         juce::String tip;
+
+        std::vector<LatticeOp> lops;
+        std::vector<int> auditioned;
+        PcMask auditionMask = 0;
     };
 }

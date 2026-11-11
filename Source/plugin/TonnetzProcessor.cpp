@@ -5,7 +5,7 @@
 
 namespace tonnetz
 {
-    juce::AudioProcessorValueTreeState::ParameterLayout params::createLayout()
+    juce::AudioProcessorValueTreeState::ParameterLayout params::createLayout (bool standalone)
     {
         juce::AudioProcessorValueTreeState::ParameterLayout layout;
         layout.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { enable, 1 }, "Enable", true));
@@ -54,6 +54,9 @@ namespace tonnetz
         // Phase 5.
         layout.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { capture, 1 }, "Capture", false));
         layout.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { captureSource, 1 }, "Capture source", false));
+
+        // Phase 6.
+        layout.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { previewTone, 1 }, "Preview tone", standalone));
         return layout;
     }
 
@@ -74,7 +77,8 @@ namespace tonnetz
 
     TonnetzProcessor::TonnetzProcessor()
         : AudioProcessor (makeBuses()),
-          state (*this, nullptr, "TonnetzML", params::createLayout())
+          state (*this, nullptr, "TonnetzML",
+                 params::createLayout (juce::PluginHostType::getPluginLoadedAs() == juce::AudioProcessor::wrapperType_Standalone))
     {
         enableParam = state.getRawParameterValue (params::enable);
         testRigParam = state.getRawParameterValue (params::testRig);
@@ -99,6 +103,7 @@ namespace tonnetz
         inKeyParam = state.getRawParameterValue (params::inKey);
         captureParam = state.getRawParameterValue (params::capture);
         captureSourceParam = state.getRawParameterValue (params::captureSource);
+        previewParam = state.getRawParameterValue (params::previewTone);
         lastKeyMode = (int) std::lround (keyParam->load());
         merged.ensureSize (65536);
         slotWords = factorySlotWords();
@@ -114,6 +119,8 @@ namespace tonnetz
     void TonnetzProcessor::prepareToPlay (double sampleRate, int)
     {
         preparedSampleRate.store (sampleRate);
+        preview.prepare (sampleRate);
+        preview.silence();
         statMaxBlock.store (0);
         merged.ensureSize (65536);
         resetRequested.store (true);
@@ -200,6 +207,7 @@ namespace tonnetz
         const bool rigOn = enabled && testRigParam->load() > 0.5f;
 
         rigEvents.clear();
+        previewEvents.clear();
         engineIn.clear();
         engineOut.clear();
         merged.clear();
@@ -208,6 +216,7 @@ namespace tonnetz
             rig.releaseAll (0, rigEvents);
             rig.forgetPosition();
             engine.releaseAll (0, engineOut);
+            preview.silence();
         }
         // A restored W and latched chord (setStateInformation).
         if (const auto& restore = walkForAudio.read(); restore.seq != restoredSeq)
@@ -249,6 +258,12 @@ namespace tonnetz
                 engineIn.push (c->type == EditorCommandType::NoteOn ? MidiEvent::noteOn (0, c->note, c->velocity, editorNotes)
                                                                     : MidiEvent::noteOff (0, c->note, editorNotes));
                 ++editorNotes;
+            }
+            else if (c->type == EditorCommandType::AuditionOn || c->type == EditorCommandType::AuditionOff)
+            {
+                // Heard through Preview tone only (below), never sent.
+                previewEvents.push (c->type == EditorCommandType::AuditionOn ? MidiEvent::noteOn (0, c->note, c->velocity, 0)
+                                                                              : MidiEvent::noteOff (0, c->note, 0));
             }
             else if (c->type == EditorCommandType::Operator)
                 engine.editorOperator (c->index);
@@ -300,6 +315,23 @@ namespace tonnetz
 
         for (const auto& e : engineOut)
             merged.addEvent (e.data, e.size, e.sample);
+
+        // Preview tone (Phase 6): what goes out, and the editor's auditions, heard.
+        const bool previewOn = ! bypassed && previewParam->load() > 0.5f;
+        if (previewOn)
+        {
+            for (const auto& e : engineOut)
+                if (e.isNoteOn() || e.isNoteOff() || e.isAllNotesOff())
+                    previewEvents.push (e);
+            previewEvents.sortBySample (true);
+            if (! previewWasOn)
+                preview.prepare (transport.sampleRate);
+            preview.render (previewEvents.begin(), previewEvents.size(), buffer.getWritePointer (0),
+                            buffer.getNumChannels() > 1 ? buffer.getWritePointer (1) : nullptr, numSamples);
+        }
+        else if (previewWasOn)
+            preview.silence();
+        previewWasOn = previewOn;
         midi.clear();
         midi.addEvents (merged, 0, -1, 0);
 
@@ -595,6 +627,17 @@ namespace tonnetz
                << "captureNotes: " << (int) capture.current().size() << "\n"
                << "captureBars: " << capture.bars() << "\n"
                << "captureLost: " << (int) capture.lossCount() << "\n";
+        // Phase 6: Preview tone and the editor's view (what a restored set brought back).
+        status << "previewTone: " << (previewParam->load() > 0.5f ? "on" : "off") << "\n"
+               << "view: zoom " << juce::String (view.zoom, 4) << " centre " << juce::String (view.centreA, 4) << " "
+               << juce::String (view.centreB, 4) << " " << (view.dark ? "dark" : "paper") << " follow " << (view.follow ? "on" : "off")
+               << " sticky " << (view.sticky ? "on" : "off") << " octave " << view.computerOctave << "\n";
+        {
+            juce::StringArray slotTexts;
+            for (int i = 0; i < numSlots; ++i)
+                slotTexts.add (slotName (i) + "=" + juce::String (printWord (getSlotWord (i)).c_str()).removeCharacters (" "));
+            status << "slots: " << slotTexts.joinIntoString (" ") << "\n";
+        }
         const auto now = juce::Time::getMillisecondCounter();
         if (status != statusWritten && (statusWritten.isEmpty() || now - statusWrittenAt >= 250))
         {
@@ -647,6 +690,56 @@ namespace tonnetz
         return w;
     }
 
+    // The editor's view (Phase 6): a VIEW child. Missing or damaged values keep the default.
+    static juce::ValueTree viewTree (const EditorView& v)
+    {
+        juce::ValueTree t ("VIEW");
+        t.setProperty ("dark", v.dark, nullptr);
+        t.setProperty ("follow", v.follow, nullptr);
+        t.setProperty ("sticky", v.sticky, nullptr);
+        t.setProperty ("showSettings", v.showSettings, nullptr);
+        t.setProperty ("zoom", v.zoom, nullptr);
+        t.setProperty ("centreA", v.centreA, nullptr);
+        t.setProperty ("centreB", v.centreB, nullptr);
+        t.setProperty ("computerOctave", v.computerOctave, nullptr);
+        return t;
+    }
+
+    static EditorView viewFromTree (const juce::ValueTree& t)
+    {
+        EditorView v;
+        if (! t.isValid())
+            return v;
+        const auto number = [&t] (const char* id, double fallback, double lo, double hi)
+        {
+            const double x = (double) t.getProperty (id, fallback);
+            return std::isfinite (x) && x >= lo && x <= hi ? x : fallback;
+        };
+        v.dark = (bool) t.getProperty ("dark", v.dark);
+        v.follow = (bool) t.getProperty ("follow", v.follow);
+        v.sticky = (bool) t.getProperty ("sticky", v.sticky);
+        v.showSettings = (bool) t.getProperty ("showSettings", v.showSettings);
+        v.zoom = number ("zoom", v.zoom, 0.05, 20.0);
+        v.centreA = number ("centreA", v.centreA, -1.0e6, 1.0e6);
+        v.centreB = number ("centreB", v.centreB, -1.0e6, 1.0e6);
+        v.computerOctave = (int) number ("computerOctave", v.computerOctave, 1.0, 8.0);
+        return v;
+    }
+
+    // On the timer (message thread): keeps a copy of the view for states saved from other
+    // threads, and applies a view restored from another thread.
+    void TonnetzProcessor::syncView()
+    {
+        const juce::ScopedLock sl (viewLock);
+        if (viewPending)
+        {
+            view = *viewPending;
+            viewPending.reset();
+            ++viewRestores;
+        }
+        viewSaved = view;
+    }
+
     void TonnetzProcessor::getStateInformation (juce::MemoryBlock& dest)
     {
         auto tree = state.copyState();
@@ -660,6 +753,12 @@ namespace tonnetz
         tree.appendChild (slots, nullptr);
         tree.removeChild (tree.getChildWithName ("WALK"), nullptr);
         tree.appendChild (walkTree (getWalkState()), nullptr);
+        tree.removeChild (tree.getChildWithName ("VIEW"), nullptr);
+        {
+            const juce::ScopedLock sl (viewLock);
+            const bool messageThread = juce::MessageManager::existsAndIsCurrentThread();
+            tree.appendChild (viewTree (messageThread ? (viewPending ? *viewPending : view) : (viewPending ? *viewPending : viewSaved)), nullptr);
+        }
         if (auto xml = tree.createXml())
             copyXmlToBinary (*xml, dest);
     }
@@ -693,6 +792,23 @@ namespace tonnetz
         const auto walk = tree.getChildWithName ("WALK");
         const WalkState walkState = walkFromTree (walk);
         tree.removeChild (walk, nullptr);
+        // The editor's view (camera, theme…): a state without one (before Phase 6) keeps the view.
+        const auto viewChild = tree.getChildWithName ("VIEW");
+        if (viewChild.isValid())
+        {
+            const auto restored = viewFromTree (viewChild);
+            const juce::ScopedLock sl (viewLock);
+            if (juce::MessageManager::existsAndIsCurrentThread())
+            {
+                view = restored;
+                viewSaved = restored;
+                viewPending.reset();
+                ++viewRestores;
+            }
+            else
+                viewPending = restored;
+        }
+        tree.removeChild (viewChild, nullptr);
         state.replaceState (tree);
         lastKeyMode = (int) std::lround (keyParam->load());     // a set saved in Hold keeps its key
         setWalkState (walkState);

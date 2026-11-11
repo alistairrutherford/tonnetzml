@@ -32,6 +32,7 @@ namespace tonnetz::ui
             { ops::minorThirdUp, "+m3", 0.5f, h },          { ops::minorThirdDown, utf8 ("\xe2\x88\x92m3"), -0.5f, -h },
             { ops::P, "P", 0.0f, 0.27f },                   { ops::L, "L", 0.23f, -0.14f },          { ops::R, "R", -0.23f, -0.14f },
             { ops::N, "N", -0.42f, 1.42f },                 { ops::S, "S", 0.0f, 1.42f },            { ops::H, "H", 0.42f, 1.42f },
+            { Op::shrink(), utf8 ("\xe2\x88\x92g"), 0.98f, 1.42f },   // Shrink: undo the latest Grow (Phase 6)
         };
         setSize (size, size + 24);
     }
@@ -196,7 +197,10 @@ namespace tonnetz::ui
             setWord (w);
         }
         else
+        {
+            havePending = false;
             processor.sendEditorCommand (EditorCommand::operatorKey (opkey::undo));    // Walk: the last op; Orbit: a step back
+        }
     }
 
     void WordBar::home()
@@ -204,7 +208,10 @@ namespace tonnetz::ui
         if (mode() == (int) Mode::Mirror)
             setWord ({});
         else
+        {
+            havePending = false;
             processor.sendEditorCommand (EditorCommand::operatorKey (opkey::home));
+        }
     }
 
     void WordBar::moveChip (int from, int to)
@@ -296,6 +303,10 @@ namespace tonnetz::ui
 
     void WordBar::refresh()
     {
+        // The engine has shown the word sent: from now on it is the engine's word that counts
+        // (an Undo straight after must not bring the sent word back).
+        if (havePending && model.word == pending)
+            havePending = false;
         slots.refresh();
         const bool e = editable();
         plus.setEnabled (e);

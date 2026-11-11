@@ -113,6 +113,7 @@
 		437CCB2975A88EF739F2281D /* Info-VST3.plist */ /* Info-VST3.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = "Info-VST3.plist"; path = "Info-VST3.plist"; sourceTree = SOURCE_ROOT; };
 		43C4766DF9F52015FAA6E920 /* juce_audio_devices */ /* juce_audio_devices */ = {isa = PBXFileReference; lastKnownFileType = folder; name = juce_audio_devices; path = /Users/alistairrutherford/Development/JUCE/modules/juce_audio_devices; sourceTree = "<absolute>"; };
 		44DC504369C06BADB2245F6B /* LatticeModel.cpp */ /* LatticeModel.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = LatticeModel.cpp; path = ../../Source/ui/LatticeModel.cpp; sourceTree = SOURCE_ROOT; };
+		45D746FC1480C2A3515F1FC9 /* PreviewVoice.h */ /* PreviewVoice.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = PreviewVoice.h; path = ../../Source/core/engine/PreviewVoice.h; sourceTree = SOURCE_ROOT; };
 		47895F861A2A62B8044590B4 /* include_juce_audio_plugin_client_VST3.mm */ /* include_juce_audio_plugin_client_VST3.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; name = include_juce_audio_plugin_client_VST3.mm; path = ../../JuceLibraryCode/include_juce_audio_plugin_client_VST3.mm; sourceTree = SOURCE_ROOT; };
 		500ADA9154DD9D0B4EF69791 /* LatticeGeometry.h */ /* LatticeGeometry.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = LatticeGeometry.h; path = ../../Source/ui/LatticeGeometry.h; sourceTree = SOURCE_ROOT; };
 		503211E6C133DE3A6C526021 /* Cycles.h */ /* Cycles.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = Cycles.h; path = ../../Source/core/lattice/Cycles.h; sourceTree = SOURCE_ROOT; };
@@ -308,6 +309,7 @@
 				E10FFF019F89663A50586051,
 				AA75D0F033E5816D3A95D903,
 				15D922906660810DFA51702B,
+				C81C45FDAED3424A08846553,
 				F0B2A069F50C0841BA9E1AB2,
 				057F09E21DEE2FBB9A7DBD19,
 				314188111D68AD04DA0E2ACB,
@@ -409,6 +411,14 @@
 				45D325E4790392006BB9E201,
 			);
 			name = TonnetzML;
+			sourceTree = "<group>";
+		};
+		C81C45FDAED3424A08846553 /* core/engine (Phase 6) */ = {
+			isa = PBXGroup;
+			children = (
+				45D746FC1480C2A3515F1FC9,
+			);
+			name = "core/engine (Phase 6)";
 			sourceTree = "<group>";
 		};
 		D2B6279E98EB188639D96A84 /* JUCE Modules */ = {

@@ -534,6 +534,7 @@ namespace tonnetz::ui
         lines.add ({ "held key", { add (new HudCycle (paramOf (P, params::keyTonic), v, {})),
                                    add (new HudToggle (paramOf (P, params::keyMinor), v, {}, "minor", "major")),
                                    add (new HudToggle (paramOf (P, params::inKey), v, {}, "in key")) } });
+        lines.add ({ "sound", { add (new HudToggle (paramOf (P, params::previewTone), v, {}, "preview")) } });
         lines.add ({ "test", { add (new HudToggle (paramOf (P, params::testRig), v, {}, "rig")) } });
         addAndMakeVisible (fold);
         refresh();

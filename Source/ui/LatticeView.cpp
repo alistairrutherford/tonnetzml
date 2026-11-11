@@ -168,7 +168,11 @@ namespace tonnetz::ui
     {
         if (processor.editorView().follow)
             followChords (false);
-        hoverGhost = hovering ? ghostAt (hoverAt) : -1;
+        rebuildLatticeOps();
+        if (hovering)
+            hoverAt_ (hoverAt);
+        else
+            hoverGhost = hoverOp = -1;
         repaint();
     }
 
@@ -342,6 +346,221 @@ namespace tonnetz::ui
         repaint();
     }
 
+    void LatticeView::viewRestored()
+    {
+        const auto& v = processor.editorView();
+        targetA = v.centreA;
+        targetB = v.centreB;
+        easing = false;
+        updateGeometry();
+        repaint();
+    }
+
+    //==========================================================================
+    // Free ops on the generated chord (Phase 6).
+
+    bool LatticeView::opsEditable() const
+    {
+        return model.generated.present && canEditWord != nullptr && canEditWord() && appendOp != nullptr;
+    }
+
+    void LatticeView::rebuildLatticeOps()
+    {
+        lops.clear();
+        if (! model.generated.present)
+            return;
+        const auto& e = model.generated.shape;
+        const Chord& c = model.generated.chord;
+        const int anchor = c.anchor;
+        const auto describe = [this] (const juce::String& what, PcMask result)
+        {
+            return what + juce::String::fromUTF8 (" \xe2\x86\x92 ") + model.longChordName (result);
+        };
+        const auto name = [this] (Vec n) { return nodeLabel (n); };
+        // Pivot on each tone.
+        for (int i = 0; i < e.size; ++i)
+        {
+            const auto op = Op::pivot (e.pc[(size_t) i] - anchor);
+            const auto st = apply (op, c);
+            if (! st.available)
+                continue;
+            LatticeOp lo;
+            lo.kind = LatticeOp::pivot;
+            lo.op = op;
+            lo.u = lo.v = e.at[(size_t) i];
+            lo.a = e.at[(size_t) i].a;
+            lo.b = e.at[(size_t) i].b;
+            lo.result = st.chord.mask;
+            lo.description = describe ("Pivot on " + name (lo.u), lo.result);
+            lops.push_back (lo);
+        }
+        // Flip through each edge; Grow across it.
+        for (int i = 0; i < e.size; ++i)
+            for (int j = i + 1; j < e.size; ++j)
+            {
+                const Vec u = e.at[(size_t) i], v = e.at[(size_t) j];
+                if (! adjacent (u, v))
+                    continue;
+                const auto flip = Op::flip (e.pc[(size_t) i] - anchor, e.pc[(size_t) j] - anchor);
+                if (const auto st = apply (flip, c); st.available)
+                {
+                    LatticeOp lo;
+                    lo.kind = LatticeOp::flip;
+                    lo.op = flip;
+                    lo.u = u;
+                    lo.v = v;
+                    lo.a = 0.5 * (u.a + v.a);
+                    lo.b = 0.5 * (u.b + v.b);
+                    lo.result = st.chord.mask;
+                    lo.description = describe ("Flip " + name (u) + juce::String::fromUTF8 ("\xe2\x80\x93") + name (v), lo.result);
+                    lops.push_back (lo);
+                }
+                const auto grow = Op::grow (e.pc[(size_t) i] - anchor, e.pc[(size_t) j] - anchor);
+                const auto st = apply (grow, c);
+                if (! st.available || st.added < 0)
+                    continue;
+                // The node across the edge that carries the added tone.
+                const Vec d = v - u;
+                for (int k = 0; k < 6; ++k)
+                    if (unitSteps[(size_t) k] == d)
+                        for (int side : { 1, 5 })
+                        {
+                            const Vec w = u + unitSteps[(size_t) ((k + side) % 6)];
+                            if (pitchClass (w) != st.added || e.contains (pitchClass (w)))
+                                continue;
+                            LatticeOp lo;
+                            lo.kind = LatticeOp::grow;
+                            lo.op = grow;
+                            lo.u = u;
+                            lo.v = v;
+                            lo.a = w.a;
+                            lo.b = w.b;
+                            lo.result = st.chord.mask;
+                            lo.description = describe ("Grow across " + name (u) + juce::String::fromUTF8 ("\xe2\x80\x93") + name (v) + " (+" + name (w) + ")", lo.result);
+                            lops.push_back (lo);
+                        }
+            }
+    }
+
+    int LatticeView::latticeOpAt (juce::Point<float> p) const
+    {
+        if (! opsEditable())
+            return -1;
+        const float nodeR = (float) nodeRadius();
+        const float edgeR = (float) juce::jmax (7.0, nodeRadius() * 0.75);
+        int best = -1;
+        float bestD = 1.0e9f;
+        for (int i = 0; i < (int) lops.size(); ++i)
+        {
+            const float d = latticeOpCentre (i).getDistanceFrom (p);
+            const float r = lops[(size_t) i].kind == LatticeOp::flip ? edgeR : nodeR;
+            if (d <= r && d < bestD)
+            {
+                bestD = d;
+                best = i;
+            }
+        }
+        return best;
+    }
+
+    bool LatticeView::clickLatticeOp (int i)
+    {
+        if (i < 0 || i >= (int) lops.size() || ! opsEditable())
+            return false;
+        appendOp (lops[(size_t) i].op);
+        return true;
+    }
+
+    std::vector<int> LatticeView::voiceLikeGenerated (PcMask mask) const
+    {
+        std::vector<int> have;
+        for (int n = 0; n < 128; ++n)
+            if (model.generatedVelocity[(size_t) n] != 0)
+                have.push_back (n);
+        const double centre = have.empty() ? 60.0 : 0.5 * (have.front() + have.back());
+        std::vector<int> out;
+        for (int pc = 0; pc < 12; ++pc)
+        {
+            if (! hasPc (mask, pc))
+                continue;
+            int kept = -1;
+            for (int n : have)
+                if (n % 12 == pc)
+                    kept = n;
+            if (kept < 0)
+            {
+                double bestD = 1.0e9;
+                for (int n = pc; n < 128; n += 12)
+                    if (std::abs (n - centre) < bestD)
+                    {
+                        bestD = std::abs (n - centre);
+                        kept = n;
+                    }
+            }
+            out.push_back (kept);
+        }
+        std::sort (out.begin(), out.end());
+        return out;
+    }
+
+    void LatticeView::audition (PcMask mask)
+    {
+        if (processor.getState().getRawParameterValue (params::previewTone)->load() < 0.5f)
+            mask = 0;
+        if (mask == auditionMask)
+            return;
+        auditionMask = mask;
+        for (int n : auditioned)
+            processor.sendEditorCommand (EditorCommand::audition (n, false));
+        auditioned = mask != 0 ? voiceLikeGenerated (mask) : std::vector<int> {};
+        for (int n : auditioned)
+            processor.sendEditorCommand (EditorCommand::audition (n, true));
+    }
+
+    void LatticeView::drawLatticeOps (juce::Graphics& g)
+    {
+        if (! opsEditable())
+            return;
+        const auto& k = ink();
+        const float r = (float) nodeRadius();
+        for (int i = 0; i < (int) lops.size(); ++i)
+        {
+            const auto& lo = lops[(size_t) i];
+            const bool hot = i == hoverOp;
+            const auto c = latticeOpCentre (i);
+            if (lo.kind == LatticeOp::grow)
+            {
+                // A dashed ring round the node a Grow would add, with a small +.
+                juce::Path ring;
+                ring.addEllipse (juce::Rectangle<float> (2 * r + 6, 2 * r + 6).withCentre (c));
+                juce::Path dashed;
+                const float dashes[] = { 3.0f, 3.0f };
+                juce::PathStrokeType (hot ? 2.2f : 1.3f).createDashedStroke (dashed, ring, dashes, 2);
+                g.setColour (k.generated.withAlpha (hot ? 1.0f : 0.55f));
+                g.fillPath (dashed);
+                g.setFont (Ink::ui (11.0f, true));
+                g.drawText ("+", juce::Rectangle<float> (12.0f, 12.0f).withCentre (c + juce::Point<float> (r * 0.9f, -r * 0.9f)), juce::Justification::centred, false);
+            }
+            else if (hot && lo.kind == LatticeOp::flip)
+            {
+                g.setColour (k.generated);
+                g.drawLine ({ screen (lo.u), screen (lo.v) }, 5.0f);
+                g.fillEllipse (juce::Rectangle<float> (8.0f, 8.0f).withCentre (c));
+            }
+            else if (hot)
+            {
+                g.setColour (k.generated);
+                g.drawEllipse (juce::Rectangle<float> (2 * r + 8, 2 * r + 8).withCentre (c), 2.2f);
+            }
+            if (hot)
+            {
+                // The result's shape, outlined as a ghost's is.
+                const auto shape = embed ((unsigned) lo.result, &model.generated.shape);
+                drawShape (g, shape, k.ghost, 0.10f, false);
+            }
+        }
+    }
+
     void LatticeView::releaseLattice()
     {
         notes.releaseHolder (EditorNotes::lattice);
@@ -410,6 +629,13 @@ namespace tonnetz::ui
             drag = Drag::none;
             return;
         }
+        if (! e.mods.isShiftDown())
+            if (const int oi = latticeOpAt (e.position); oi >= 0)
+            {
+                clickLatticeOp (oi);
+                drag = Drag::none;
+                return;
+            }
         if (e.mods.isShiftDown())
         {
             double d = 0.0;
@@ -451,33 +677,53 @@ namespace tonnetz::ui
 
     void LatticeView::mouseMove (const juce::MouseEvent& e)
     {
+        hoverAt_ (e.position);
+    }
+
+    void LatticeView::hoverAt_ (juce::Point<float> p)
+    {
         hovering = true;
-        hoverAt = e.position;
-        const int gi = ghostAt (e.position);
+        hoverAt = p;
+        const int gi = ghostAt (p);
+        const int oi = gi >= 0 ? -1 : latticeOpAt (p);
         juce::String t;
+        PcMask heard = 0;
         if (gi >= 0)
+        {
             t = model.ghosts[(size_t) gi].description;
+            if (model.ghosts[(size_t) gi].available)
+                heard = model.ghosts[(size_t) gi].result.mask;
+        }
+        else if (oi >= 0)
+        {
+            t = lops[(size_t) oi].description;
+            heard = lops[(size_t) oi].result;
+        }
         else
         {
-            const Triangle tri = geo.triangleAt (e.position.x, e.position.y);
+            const Triangle tri = geo.triangleAt (p.x, p.y);
             t = model.longChordName (tri.mask());
         }
-        setMouseCursor (gi >= 0 && ghostsClickable() ? juce::MouseCursor::PointingHandCursor : juce::MouseCursor::NormalCursor);
-        if (gi != hoverGhost || t != tip)
+        audition (heard);
+        setMouseCursor ((gi >= 0 && ghostsClickable()) || oi >= 0 ? juce::MouseCursor::PointingHandCursor : juce::MouseCursor::NormalCursor);
+        if (gi != hoverGhost || oi != hoverOp || t != tip)
         {
             hoverGhost = gi;
+            hoverOp = oi;
             tip = t;
             repaint();
         }
         else
-            repaint (juce::Rectangle<int> ((int) e.position.x - 300, (int) e.position.y - 60, 600, 120));
+            repaint (juce::Rectangle<int> ((int) p.x - 300, (int) p.y - 60, 600, 120));
     }
 
     void LatticeView::mouseExit (const juce::MouseEvent&)
     {
         hovering = false;
         hoverGhost = -1;
+        hoverOp = -1;
         tip = {};
+        audition (0);
         repaint();
     }
 
@@ -920,6 +1166,7 @@ namespace tonnetz::ui
             drawShape (g, model.generated.shape, k.generated, 0.26f, true);
         drawPath (g);
         drawGhosts (g);
+        drawLatticeOps (g);
         drawSounding (g);
 
         // The foot of the page fades to paper, so the word bar and the hints read clearly.

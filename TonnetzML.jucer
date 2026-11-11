@@ -42,6 +42,9 @@
         <FILE id="tzF044" name="KeyBand.h" compile="0" resource="0" file="Source/core/theory/KeyBand.h"/>
         <FILE id="tzF045" name="RomanNumeral.h" compile="0" resource="0" file="Source/core/theory/RomanNumeral.h"/>
       </GROUP>
+      <GROUP id="tzGrp7" name="core/engine (Phase 6)">
+        <FILE id="tzF083" name="PreviewVoice.h" compile="0" resource="0" file="Source/core/engine/PreviewVoice.h"/>
+      </GROUP>
       <GROUP id="tzGrp6" name="core/midiio">
         <FILE id="tzF080" name="CaptureQueue.h" compile="0" resource="0" file="Source/core/midiio/CaptureQueue.h"/>
         <FILE id="tzF081" name="CaptureModel.h" compile="0" resource="0" file="Source/core/midiio/CaptureModel.h"/>
