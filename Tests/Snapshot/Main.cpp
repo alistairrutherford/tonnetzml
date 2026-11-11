@@ -27,7 +27,22 @@
 //               is ignored; (Phase 3) the current W and the latched chord come back, the chord
 //               silent until the transport starts; a state without them (Phase 2) has neither
 //
-// Later phases add the lattice images, hit-testing and "every parameter has a control".
+//   9. lattice  (Phase 4) the lattice editor: reference images of fixed chords and words (Mirror
+//               P L on C; Walk P L on Cmaj7 in C major with In key; Orbit LR; empty) in both
+//               themes at up to three sizes; no stock combo boxes, sliders or buttons; the
+//               header's sentence spelled and numbered in the key
+//  10. play     a click at the centre of each of the 24 triangles plays that triad; a drag
+//               glides (one voice moves); shift-click builds a set; Sticky; a ghost click
+//               appends its op in Walk and not in Mirror; the keyboard strip and its operator
+//               zone; a stop makes the editor forget what it held
+//  11. controls every parameter has a control, visible, inside the window, not overlapping
+//               another, and a click changes it (at 760 x 520 and 1400 x 900)
+//  12. word bar text entry, the palette, dragging chips to reorder and off to delete, Undo and
+//               Home, the slot's word in Mirror, W in Walk, the cycle read only in Orbit
+//  13. key      spelling in the key (E♭ minor writes C♭), numerals, at most double accidentals,
+//               In key marks exactly opsInKey's ghosts
+//  14. realtime no allocation in processBlock while the editor sends notes, ghost clicks and
+//               words; the command queue's limit; a press and release in one block keep order
 //
 //   TonnetzMLSnapshot <fixtures dir> <output dir> [--update | --no-pixels]
 //
@@ -198,19 +213,10 @@ namespace
     }
 
     //==========================================================================
-    void snapshot (TonnetzProcessor& p, int width, int height, const juce::File& fixtures, const juce::File& output)
+    // A reference image: written to the output dir; compared with Tests/fixtures/snapshot (at most
+    // 0.5% of pixels may differ by more than 24 levels), or written there with --update.
+    void compareImage (const juce::Image& image, const juce::String& name, const juce::File& fixtures, const juce::File& output)
     {
-        std::unique_ptr<juce::AudioProcessorEditor> editor (p.createEditor());
-        const auto name = "editor_" + juce::String (width) + "x" + juce::String (height);
-        if (editor == nullptr)
-        {
-            check (false, name + ": the processor made an editor");
-            return;
-        }
-        editor->setSize (width, height);
-        check (editor->getWidth() == width && editor->getHeight() == height, name + ": the editor takes the size");
-        const auto image = editor->createComponentSnapshot (editor->getLocalBounds(), false, 1.0f);
-
         juce::PNGImageFormat png;
         output.createDirectory();
         const auto outFile = output.getChildFile (name + ".png");
@@ -218,12 +224,11 @@ namespace
         if (juce::FileOutputStream out (outFile); out.openedOk())
             png.writeImageToStream (image, out);
 
-        // Not blank: the page colour and the ink of the name are both there.
         std::set<juce::uint32> colours;
         for (int y = 0; y < image.getHeight(); y += 2)
             for (int x = 0; x < image.getWidth(); x += 2)
                 colours.insert (image.getPixelAt (x, y).getARGB());
-        check (image.getWidth() == width && image.getHeight() == height && colours.size() > 8, name + ": rendered (" + juce::String ((int) colours.size()) + " colours)");
+        check (colours.size() > 8, name + ": rendered (" + juce::String ((int) colours.size()) + " colours)");
 
         const auto refFile = fixtures.getChildFile (name + ".png");
         if (updateImages)
@@ -251,35 +256,6 @@ namespace
             const double percent = 100.0 * differing / (image.getWidth() * image.getHeight());
             check (percent <= 0.5, name + ": matches the reference (" + juce::String (percent, 3) + "% of pixels differ)");
         }
-    }
-
-    void testEditor (const juce::File& fixtures, const juce::File& output)
-    {
-        std::cout << "editor" << std::endl;
-        TonnetzProcessor p;
-        check (p.hasEditor(), "the processor has an editor");
-        snapshot (p, TonnetzEditor::minWidth, TonnetzEditor::minHeight, fixtures, output);
-        snapshot (p, 1200, 800, fixtures, output);
-        std::unique_ptr<juce::AudioProcessorEditor> editor (p.createEditor());
-        editor->setSize (200, 100);
-        check (editor->isResizable() && editor->getWidth() == 200, "resizable (the host is held to 760 x 520 by the constrainer)");
-        if (auto* c = editor->getConstrainer())
-            check (c->getMinimumWidth() == TonnetzEditor::minWidth && c->getMinimumHeight() == TonnetzEditor::minHeight, "smallest size 760 x 520");
-
-        // The word field (Phase 2).
-        auto& ed = dynamic_cast<TonnetzEditor&> (*editor);
-        check (ed.wordField().getText() == "P", "the word field shows slot A's word (P)");
-        ed.wordField().setText (juce::String::fromUTF8 ("P\xc2\xb7L R"), false);   // P·L R
-        ed.commitWord();
-        check (printWord (p.getSlotWord (0)).c_str() == std::string ("P L R") && ed.wordField().getText() == "P L R",
-               "a word typed in is stored in the slot and shown as printed (P L R)");
-        ed.wordField().setText ("P Q", false);
-        ed.commitWord();
-        check (printWord (p.getSlotWord (0)).c_str() == std::string ("P L R") && ed.wordMessage().startsWith ("Not a word"),
-               "text that isn't a word is refused, and the slot keeps its word");
-        setPlain (p, params::slot, 4.0f);
-        juce::MessageManager::getInstance()->runDispatchLoopUntil (300);
-        check (ed.wordField().getText() == "P L", "the field follows the slot parameter (E: P L)");
     }
 
     void testThrough()
@@ -921,6 +897,633 @@ namespace
         b.setStateInformation (nullptr, 0);
         check (b.getState().getParameter (params::enable)->getValue() == 0.0f && b.getSlotWord (7) == a.getSlotWord (7), "garbage is ignored");
     }
+    //==========================================================================
+    // The lattice editor (Phase 4, PLAN.md §5, §7.2).
+
+    TonnetzEditor& editorOf (std::unique_ptr<juce::AudioProcessorEditor>& e) { return dynamic_cast<TonnetzEditor&> (*e); }
+
+    // A synthetic mouse event on `c` at `pos` (its own coordinates).
+    juce::MouseEvent mouseAt (juce::Component& c, juce::Point<float> pos, juce::ModifierKeys mods = {}, int clicks = 1, juce::Point<float> downAt = { -1.0f, -1.0f })
+    {
+        const auto now = juce::Time::getCurrentTime();
+        return juce::MouseEvent (juce::Desktop::getInstance().getMainMouseSource(), pos, mods, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, &c, &c, now,
+                                 downAt.x < 0.0f ? pos : downAt, now, clicks, false);
+    }
+
+    const auto leftButton = juce::ModifierKeys (juce::ModifierKeys::leftButtonModifier);
+
+    // The editor's own snapshot (the editor at `w` × `h`, animation held still).
+    juce::Image editorImage (TonnetzEditor& ed, int w, int h)
+    {
+        ed.setSize (w, h);
+        ed.refreshNow();
+        ed.latticeView().recentre();
+        ed.refreshNow();
+        return ed.createComponentSnapshot (ed.getLocalBounds(), false, 1.0f);
+    }
+
+    juce::MidiBuffer chordOn (std::initializer_list<int> notes, int sample = 0, int velocity = 100)
+    {
+        juce::MidiBuffer b;
+        for (int n : notes)
+            b.addEvent (juce::MidiMessage::noteOn (1, n, (juce::uint8) velocity), sample);
+        return b;
+    }
+
+    std::set<int> pcsOf (const std::set<int>& notes)
+    {
+        std::set<int> s;
+        for (int n : notes)
+            s.insert (n % 12);
+        return s;
+    }
+
+    std::set<int> pcsOfMask (unsigned m)
+    {
+        std::set<int> s;
+        for (int i = 0; i < 12; ++i)
+            if ((m >> i) & 1u)
+                s.insert (i);
+        return s;
+    }
+
+    void testEditor (const juce::File& fixtures, const juce::File& output)
+    {
+        std::cout << "editor" << std::endl;
+        TonnetzProcessor p;
+        check (p.hasEditor(), "the processor has an editor");
+        std::unique_ptr<juce::AudioProcessorEditor> editor (p.createEditor());
+        check (editor != nullptr && editor->getWidth() == TonnetzEditor::minWidth && editor->getHeight() == TonnetzEditor::minHeight, "it opens at 760 x 520");
+        editor->setSize (200, 100);
+        check (editor->isResizable() && editor->getWidth() == 200, "resizable (the host is held to 760 x 520 by the constrainer)");
+        if (auto* c = editor->getConstrainer())
+            check (c->getMinimumWidth() == TonnetzEditor::minWidth && c->getMinimumHeight() == TonnetzEditor::minHeight, "smallest size 760 x 520");
+        auto& ed = editorOf (editor);
+        ed.freezeAnimation (true);
+        ed.setSize (760, 520);
+
+        // Nothing from the siblings' look: no combo boxes, sliders or text buttons anywhere.
+        int stock = 0;
+        std::function<void (juce::Component&)> walk = [&] (juce::Component& c)
+        {
+            stock += dynamic_cast<juce::ComboBox*> (&c) != nullptr || dynamic_cast<juce::Slider*> (&c) != nullptr || dynamic_cast<juce::TextButton*> (&c) != nullptr;
+            for (auto* child : c.getChildren())
+                walk (*child);
+        };
+        walk (ed);
+        check (stock == 0, "no combo boxes, sliders or text buttons (the controls are HUD labels and chips)");
+
+        // The empty lattice in the paper theme at the smallest size.
+        compareImage (editorImage (ed, 760, 520), "lattice_empty_paper_760x520", fixtures, output);
+        check (ed.model().sentence.isEmpty() && ! ed.model().source.present, "with nothing playing there is no chord and no sentence");
+    }
+
+    // Reference images: fixed chords and words in both themes at three sizes (§7.2).
+    void testLatticeImages (const juce::File& fixtures, const juce::File& output)
+    {
+        std::cout << "lattice images" << std::endl;
+        const int sizes[3][2] = { { 760, 520 }, { 1200, 800 }, { 1800, 1100 } };
+
+        // 1. Mirror, slot E (P L), C E G from the host: the generated chord is A♭ (C E♭ A♭).
+        {
+            MiniHost h;
+            setPlain (*h.p, params::gatherMs, 0.0f);
+            setPlain (*h.p, params::slot, 4.0f);
+            h.p->getState().getParameter (params::key)->setValueNotifyingHost (0.0f);      // Key Off: plain C major spelling
+            std::unique_ptr<juce::AudioProcessorEditor> e (h.p->createEditor());
+            auto& ed = editorOf (e);
+            ed.freezeAnimation (true);
+            h.process (chordOn ({ 60, 64, 67 }));
+            h.process();
+            for (int theme = 0; theme < 2; ++theme)
+            {
+                ed.setDark (theme == 1);
+                for (const auto& s : sizes)
+                    compareImage (editorImage (ed, s[0], s[1]), juce::String ("lattice_mirror_PL_") + (theme ? "dark_" : "paper_") + juce::String (s[0]) + "x" + juce::String (s[1]),
+                                  fixtures, output);
+            }
+            check (ed.model().sentence == juce::String::fromUTF8 ("C \xe2\x94\x80\xe2\x94\x80P\xc2\xb7L\xe2\x94\x80\xe2\x94\x80\xe2\x96\xba A\xe2\x99\xad"),
+                   "the header's sentence: " + ed.model().sentence);
+            check (ed.model().path.size() == 2 && ed.model().source.shape.size == 3 && ed.model().generated.present,
+                   "W's path has two steps (P, then L) from the source triangle");
+        }
+
+        // 2. Walk, Cmaj7 held, W = P L from the word bar, key held at C major with In key: the
+        //    plan's sentence, rhombi, ghosts solid in the key and faint outside it.
+        {
+            MiniHost h;
+            setPlain (*h.p, params::gatherMs, 0.0f);
+            setPlain (*h.p, params::mode, 1.0f);
+            setPlain (*h.p, params::key, 2.0f);
+            setPlain (*h.p, params::keyTonic, 0.0f);
+            setPlain (*h.p, params::inKey, 1.0f);
+            std::unique_ptr<juce::AudioProcessorEditor> e (h.p->createEditor());
+            auto& ed = editorOf (e);
+            ed.freezeAnimation (true);
+            h.process (chordOn ({ 60, 64, 67, 71 }));
+            ed.refreshNow();
+            Word w;
+            parseWord ("P L", w);
+            ed.wordBar().setWord (w);
+            h.process();
+            h.process();
+            for (int theme = 0; theme < 2; ++theme)
+            {
+                ed.setDark (theme == 1);
+                for (int s = 0; s < 2; ++s)
+                    compareImage (editorImage (ed, sizes[s][0], sizes[s][1]), juce::String ("lattice_walk_cmaj7_key_") + (theme ? "dark_" : "paper_") + juce::String (sizes[s][0]) + "x" + juce::String (sizes[s][1]),
+                                  fixtures, output);
+            }
+            check (ed.model().sentence == juce::String::fromUTF8 ("Cmaj7 (I) \xe2\x94\x80\xe2\x94\x80P\xc2\xb7L\xe2\x94\x80\xe2\x94\x80\xe2\x96\xba A\xe2\x99\xadmaj7 (\xe2\x99\xadVI)"),
+                   "the plan's sentence, spelled and numbered in C major: " + ed.model().sentence);
+            check (classify (ed.model().source.shape).shape == Shape::Rhombus && classify (ed.model().generated.shape).shape == Shape::Rhombus,
+                   "Cmaj7 and A\xe2\x99\xadmaj7 are rhombi");
+        }
+
+        // 3. Orbit LR on A minor: the cycle's loop through all 24 triads.
+        {
+            MiniHost h;
+            setPlain (*h.p, params::gatherMs, 0.0f);
+            setPlain (*h.p, params::mode, 2.0f);
+            setPlain (*h.p, params::orbitCycle, 2.0f);
+            setPlain (*h.p, params::orbitRate, 0.0f);
+            h.p->getState().getParameter (params::key)->setValueNotifyingHost (0.0f);
+            std::unique_ptr<juce::AudioProcessorEditor> e (h.p->createEditor());
+            auto& ed = editorOf (e);
+            ed.freezeAnimation (true);
+            h.process (chordOn ({ 57, 60, 64 }));
+            h.runTo (h.pos + MiniHost::at (3.1));          // three quarter-note steps
+            compareImage (editorImage (ed, 1200, 800), "lattice_orbit_LR_paper_1200x800", fixtures, output);
+            check (ed.model().cycle.size() == 25 && ed.model().cycleAt == 3, "Orbit LR: a loop of 24 triads drawn, the step reached marked ("
+                   + juce::String ((int) ed.model().cycle.size()) + ", at " + juce::String (ed.model().cycleAt) + ")");
+        }
+    }
+
+    // A click at the centre of each of the 24 triangles plays that triad (§7.2); a drag glides;
+    // shift-click builds a set; a ghost click appends its op; the keyboard strip plays.
+    void testDirectPlay()
+    {
+        std::cout << "direct play" << std::endl;
+        MiniHost h;
+        setPlain (*h.p, params::gatherMs, 0.0f);
+        setPlain (*h.p, params::mix, 2.0f);                   // Source only: what was played comes out as it is
+        std::unique_ptr<juce::AudioProcessorEditor> e (h.p->createEditor());
+        auto& ed = editorOf (e);
+        ed.freezeAnimation (true);
+        ed.setSize (1200, 800);
+        ed.setVisible (true);                                 // (no window: getComponentAt needs it)
+        h.p->editorView().sticky = false;
+        auto& lat = ed.latticeView();
+        const auto& geo = lat.geometry();
+
+        int good = 0;
+        juce::StringArray bad;
+        for (int root = 0; root < 12; ++root)
+            for (const bool major : { true, false })
+            {
+                // A copy of the triangle in the open (not under a floating control).
+                juce::Point<float> at;
+                bool found = false;
+                for (int b = -4; b <= 4 && ! found; ++b)
+                    for (int a = -6; a <= 6 && ! found; ++a)
+                    {
+                        const Vec r { a, b };
+                        if (pitchClass (r) != root)
+                            continue;
+                        const ui::Triangle t { r, major };
+                        const auto c = geo.screenCentreOf (t);
+                        const auto inEditor = ed.getLocalPoint (&lat, juce::Point<float> ((float) c.x, (float) c.y));
+                        if (c.x > 20 && c.y > 20 && c.x < lat.getWidth() - 20 && c.y < lat.getHeight() - 90
+                            && ed.getComponentAt (inEditor) == &lat)
+                        {
+                            at = { (float) c.x, (float) c.y };
+                            found = true;
+                        }
+                    }
+                const auto mask = major ? majorTriadMask (root) : minorTriadMask (root);
+                const size_t before = h.notes.size();
+                lat.mouseDown (mouseAt (lat, at, leftButton));
+                h.process();
+                const auto on = soundingOn (h, 1);
+                const bool ok = found && geo.triangleAt (at.x, at.y).mask() == mask && pcsOf (on) == pcsOfMask (mask) && on.size() == 3;
+                lat.mouseUp (mouseAt (lat, at));
+                h.process();
+                const bool off = soundingOn (h, 1).empty() && h.notes.size() == before + 6;
+                good += ok && off ? 1 : 0;
+                if (! (ok && off))
+                    bad.add (juce::String (root) + (major ? "M" : "m") + " (" + text (on) + ")");
+            }
+        check (good == 24, "a click at each of the 24 triangles' centres plays its triad and lets go (" + juce::String (good) + "/24) " + bad.joinIntoString (", "));
+
+        // A drag glides: C major to E minor (L) moves one voice, C down to B.
+        {
+            const ui::Triangle cMajor { { 0, 0 }, true }, eMinor { { 0, 1 }, false };
+            const auto c1 = geo.screenCentreOf (cMajor), c2 = geo.screenCentreOf (eMinor);
+            lat.mouseDown (mouseAt (lat, { (float) c1.x, (float) c1.y }, leftButton));
+            h.process();
+            const auto first = soundingOn (h, 1);
+            const size_t before = h.notes.size();
+            lat.mouseDrag (mouseAt (lat, { (float) c2.x, (float) c2.y }, leftButton, 1, { (float) c1.x, (float) c1.y }));
+            h.process();
+            const auto second = soundingOn (h, 1);
+            check (first == std::set<int> { 60, 64, 67 } && second == std::set<int> { 59, 64, 67 } && h.notes.size() == before + 2,
+                   "dragging from C major into E minor glides: one voice moves (C to B): " + text (first) + " / " + text (second));
+            lat.mouseUp (mouseAt (lat, { (float) c2.x, (float) c2.y }));
+            h.process();
+            check (soundingOn (h, 1).empty(), "letting go ends it (Sticky off)");
+        }
+
+        // Shift-click four nodes: C, E, G, B♭ is C7; shift-clicking E again removes it.
+        {
+            for (const Vec v : { Vec { 0, 0 }, Vec { 0, 1 }, Vec { 1, 0 }, Vec { -2, 0 } })
+            {
+                const auto c = geo.toScreen (v);
+                lat.mouseDown (mouseAt (lat, { (float) c.x + 2.0f, (float) c.y - 1.0f }, leftButton.withFlags (juce::ModifierKeys::shiftModifier)));
+                lat.mouseUp (mouseAt (lat, { (float) c.x + 2.0f, (float) c.y - 1.0f }));
+            }
+            h.process();
+            const auto set = pcsOf (soundingOn (h, 1));
+            const auto e1 = geo.toScreen (Vec { 0, 1 });
+            lat.mouseDown (mouseAt (lat, { (float) e1.x, (float) e1.y }, leftButton.withFlags (juce::ModifierKeys::shiftModifier)));
+            h.process();
+            check (set == std::set<int> { 0, 4, 7, 10 } && pcsOf (soundingOn (h, 1)) == std::set<int> { 0, 7, 10 },
+                   "shift-clicking C, E, G and B\xe2\x99\xad builds C7; shift-clicking E again takes it out");
+            lat.releaseLattice();
+            h.process();
+        }
+
+        // Sticky: a triangle stays down after the click, and goes on a second click.
+        {
+            h.p->editorView().sticky = true;
+            const auto c = geo.screenCentreOf ({ { 1, 0 }, true });     // G major
+            lat.mouseDown (mouseAt (lat, { (float) c.x, (float) c.y }, leftButton));
+            lat.mouseUp (mouseAt (lat, { (float) c.x, (float) c.y }));
+            h.process();
+            const auto held = pcsOf (soundingOn (h, 1));
+            lat.mouseDown (mouseAt (lat, { (float) c.x, (float) c.y }, leftButton));
+            lat.mouseUp (mouseAt (lat, { (float) c.x, (float) c.y }));
+            h.process();
+            check (held == std::set<int> { 7, 11, 2 } && soundingOn (h, 1).empty(), "Sticky: G major stays down after the click and goes on a second click");
+        }
+
+        // A ghost click (Walk): with C major held, the L chip appends L; E minor sounds.
+        {
+            setPlain (*h.p, params::mode, 1.0f);
+            setPlain (*h.p, params::mix, 0.0f);
+            setPlain (*h.p, params::opZoneOn, 0.0f);
+            const auto c = geo.screenCentreOf ({ { 0, 0 }, true });
+            lat.mouseDown (mouseAt (lat, { (float) c.x, (float) c.y }, leftButton));
+            lat.mouseUp (mouseAt (lat, { (float) c.x, (float) c.y }));
+            h.process();
+            ed.refreshNow();
+            const auto chip = lat.ghostChipCentre (1);                // L
+            const int hit = lat.ghostAt (chip);
+            lat.mouseDown (mouseAt (lat, chip, leftButton));
+            lat.mouseUp (mouseAt (lat, chip));
+            h.process();
+            ed.refreshNow();
+            const auto s = h.p->getEngineStatus();
+            check (hit == 1 && printWord (s.walk.word).c_str() == std::string ("L") && pcsOf (soundingOn (h, 2)) == std::set<int> { 4, 7, 11 },
+                   "Walk: clicking the L ghost (operator keys off) appends L and E minor sounds: " + text (soundingOn (h, 2)));
+            check (ed.model().ghosts[1].description.startsWith (juce::String::fromUTF8 ("L \xe2\x86\x92 C major")),
+                   "the L ghost of E minor names its result: " + ed.model().ghosts[1].description);
+            setPlain (*h.p, params::mode, 0.0f);
+            h.process();
+            ed.refreshNow();
+            const int count = (int) h.notes.size();
+            lat.mouseDown (mouseAt (lat, lat.ghostChipCentre (0), leftButton));
+            h.process();
+            check (! lat.ghostsClickable() && printWord (h.p->getEngineStatus().walk.word).c_str() == std::string ("L") && (int) h.notes.size() >= count,
+                   "Mirror: the ghosts are labels, not buttons (a click there plays the triangle instead)");
+            lat.releaseLattice();
+            h.process();
+        }
+
+        // The keyboard strip: a click plays a key (Sticky: it stays until clicked again); an
+        // operator-zone key walks W and doesn't sound.
+        {
+            setPlain (*h.p, params::mode, 1.0f);
+            setPlain (*h.p, params::mix, 1.0f);
+            setPlain (*h.p, params::opZoneOn, 1.0f);
+            auto& kb = ed.keyboardStrip();
+            for (int n : { 60, 64, 67 })
+                kb.mouseDown (mouseAt (kb, kb.keyBounds (n).getCentre(), leftButton));
+            h.process();
+            const auto held = soundingOn (h, 1);
+            ed.refreshNow();
+            const auto zone24 = kb.keyBounds (24).getCentre();
+            kb.mouseDown (mouseAt (kb, zone24, leftButton));            // P
+            kb.mouseDown (mouseAt (kb, zone24, leftButton));            // and up again (sticky)
+            h.process();
+            bool zoneSilent = true;
+            for (const auto& n : h.notes)
+                zoneSilent = zoneSilent && n.note != 24;
+            check (held == std::set<int> { 60, 64, 67 } && zoneSilent && printWord (h.p->getEngineStatus().walk.word).c_str() == std::string ("L P"),
+                   "keyboard strip: C E G clicked on, the P key (C0) walks W (L P) and never sounds");
+            check (ui::KeyboardStrip::keyName (60) == "C3" && ui::KeyboardStrip::keyName (24) == "C0", "keys are named as Live names them (C3 = 60, C0 = 24)");
+            for (int n : { 60, 64, 67 })
+                kb.clickKey (n, 100);
+            h.process();
+            check (soundingOn (h, 1).empty(), "clicking held keys again lets them go");
+        }
+
+        // A stop: the engine lets go of everything and the editor forgets what it held.
+        {
+            setPlain (*h.p, params::mix, 2.0f);
+            setPlain (*h.p, params::mode, 0.0f);              // (in Walk a ghost chip could sit on the triangle)
+            h.process();
+            ed.refreshNow();
+            const auto c = geo.screenCentreOf ({ { 0, 0 }, true });
+            lat.mouseDown (mouseAt (lat, { (float) c.x, (float) c.y }, leftButton));
+            lat.mouseUp (mouseAt (lat, { (float) c.x, (float) c.y }));
+            h.process();
+            const bool wasHeld = ed.editorNotes().any (ui::EditorNotes::lattice);
+            h.head.playing = true;
+            h.process();
+            h.head.playing = false;
+            h.process();
+            ed.refreshNow();
+            check (wasHeld && ! ed.editorNotes().any (ui::EditorNotes::lattice) && ! lat.heldTriangle().has_value() && soundingOn (h, 1).empty(),
+                   "a transport stop ends the clicked chord and the editor forgets it (" + juce::String ((int) wasHeld) + juce::String ((int) ed.editorNotes().any (ui::EditorNotes::lattice))
+                       + juce::String ((int) lat.heldTriangle().has_value()) + " " + text (soundingOn (h, 1)) + ")");
+        }
+    }
+
+    // Every parameter has a control on screen (§5, §7.2), and clicking it changes the parameter.
+    void testControls()
+    {
+        std::cout << "controls" << std::endl;
+        TonnetzProcessor p;
+        std::unique_ptr<juce::AudioProcessorEditor> e (p.createEditor());
+        auto& ed = editorOf (e);
+        ed.freezeAnimation (true);
+        for (const auto& size : { std::make_pair (760, 520), std::make_pair (1400, 900) })
+        {
+            ed.setSize (size.first, size.second);
+            ed.refreshNow();
+            int found = 0, inside = 0, works = 0, total = 0;
+            juce::StringArray missing, broken;
+            for (auto* param : p.getParameters())
+            {
+                auto* ranged = dynamic_cast<juce::RangedAudioParameter*> (param);
+                if (ranged == nullptr)
+                    continue;
+                ++total;
+                const auto id = ranged->getParameterID();
+                auto* c = ed.controlFor (id);
+                if (c == nullptr)
+                {
+                    missing.add (id);
+                    continue;
+                }
+                ++found;
+                bool visible = true;
+                for (juce::Component* x = c; x != nullptr && x != &ed; x = x->getParentComponent())
+                    visible = visible && x->isVisible();
+                const auto r = ed.getLocalArea (c, c->getLocalBounds());
+                if (visible && ! r.isEmpty() && ed.getLocalBounds().contains (r) && r.getWidth() >= c->preferredWidth() - 1)
+                    ++inside;
+                else
+                    broken.add (id + " (bounds)");
+                const float before = ranged->getValue();
+                c->activate (false);
+                const float after = ranged->getValue();
+                if (after != before)
+                    ++works;
+                else
+                    broken.add (id + " (click)");
+                ranged->setValueNotifyingHost (before);
+                c->refresh();
+            }
+            check (found == total && total == 21, juce::String (size.first) + " x " + juce::String (size.second) + ": every parameter has a control ("
+                   + juce::String (found) + "/" + juce::String (total) + ") " + missing.joinIntoString (" "));
+            check (inside == total && works == total, "each is visible, inside the window at its full width, and a click changes it " + broken.joinIntoString (" "));
+
+            // No two controls overlap.
+            auto all = ed.controls();
+            int overlaps = 0;
+            for (int i = 0; i < all.size(); ++i)
+                for (int j = 0; j < i; ++j)
+                    overlaps += ed.getLocalArea (all[i], all[i]->getLocalBounds()).intersects (ed.getLocalArea (all[j], all[j]->getLocalBounds())) ? 1 : 0;
+            check (overlaps == 0, "no two controls overlap (" + juce::String (overlaps) + ")");
+        }
+
+        // A row of chips is clicked on its option: Orbit in the mode row.
+        auto* mode = dynamic_cast<ui::HudChoices*> (ed.controlFor (params::mode));
+        mode->mouseUp (mouseAt (*mode, mode->optionBounds (2).getCentre()));
+        check (plain (p, params::mode) == 2.0f, "clicking Orbit in the mode row selects it");
+        // The key badge cycles Listen, Hold, Off.
+        auto* key = ed.controlFor (params::key);
+        key->activate (false);
+        const float hold = plain (p, params::key);
+        key->activate (false);
+        const float off = plain (p, params::key);
+        key->activate (false);
+        check (hold == 2.0f && off == 0.0f && plain (p, params::key) == 1.0f, "the key badge cycles Listen, Hold, Off, Listen");
+        // A number: Gather moves by 5 a click and wraps.
+        auto* gather = ed.controlFor (params::gatherMs);
+        gather->activate (false);
+        check (plain (p, params::gatherMs) == 25.0f && gather->valueText() == "25 ms", "gather: a click adds 5 ms (" + gather->valueText() + ")");
+    }
+
+    // The word bar (§5): text entry, the palette, dragging chips, Mirror's slot word, Walk's W.
+    void testWordBar()
+    {
+        std::cout << "word bar" << std::endl;
+        MiniHost h;
+        setPlain (*h.p, params::gatherMs, 0.0f);
+        std::unique_ptr<juce::AudioProcessorEditor> e (h.p->createEditor());
+        auto& ed = editorOf (e);
+        ed.freezeAnimation (true);
+        auto& wb = ed.wordBar();
+        const auto slotWord = [&h] (int s) { return std::string (printWord (h.p->getSlotWord (s)).c_str()); };
+
+        check (printWord (wb.shownWord()).c_str() == std::string ("P"), "Mirror: the bar shows slot A's word (P)");
+        wb.beginTextEntry();
+        wb.textField().setText (juce::String::fromUTF8 ("P\xc2\xb7L R"), false);
+        check (wb.commitText() && slotWord (0) == "P L R", "a word typed in (P\xc2\xb7L R) is stored in the slot as P L R");
+        wb.beginTextEntry();
+        wb.textField().setText ("P Q", false);
+        check (! wb.commitText() && slotWord (0) == "P L R" && wb.message().startsWith ("Not a word"), "text that isn't a word is refused; the slot keeps its word");
+        wb.textField().setVisible (false);
+
+        wb.openPalette();
+        auto* pal = wb.palette();
+        check (pal != nullptr && pal->isVisible() && pal->getParentComponent() == &ed, "+ opens the op palette over the lattice");
+        pal->pick (0);                                       // +5
+        check (slotWord (0) == "P L R +5" && ! pal->isVisible(), "picking +5 appends it and closes the palette");
+
+        // Drag the first chip (P) after the third (R); then drag L off the bar to delete it.
+        {
+            const auto from = wb.chipBounds (0).getCentre(), to = wb.chipBounds (2).getCentre() + juce::Point<float> (4.0f, 0.0f);
+            wb.mouseDown (mouseAt (wb, from, leftButton));
+            wb.mouseDrag (mouseAt (wb, to, leftButton, 1, from));
+            wb.mouseUp (mouseAt (wb, to));
+            const auto afterMove = slotWord (0);
+            const auto l = wb.chipBounds (0).getCentre();
+            wb.mouseDown (mouseAt (wb, l, leftButton));
+            wb.mouseDrag (mouseAt (wb, l + juce::Point<float> (0.0f, -60.0f), leftButton, 1, l));
+            wb.mouseUp (mouseAt (wb, l + juce::Point<float> (0.0f, -60.0f)));
+            check (afterMove == "L R P +5" && slotWord (0) == "R P +5", "dragging P after R reorders (" + afterMove + "); dropping L off the bar deletes it (" + slotWord (0) + ")");
+        }
+        wb.undo();
+        check (slotWord (0) == "R P", "\xe2\x8c\xab removes the last op");
+        wb.home();
+        check (slotWord (0).empty(), "\xe2\x8c\x82 clears the word");
+        setPlain (*h.p, params::slot, 4.0f);
+        ed.refreshNow();
+        check (printWord (wb.shownWord()).c_str() == std::string ("P L"), "the bar follows the slot parameter (E: P L)");
+
+        // Walk: the bar edits W in the engine.
+        setPlain (*h.p, params::mode, 1.0f);
+        h.process (chordOn ({ 60, 64, 67 }));
+        wb.appendOp (ops::R);
+        wb.appendOp (ops::majorThirdUp);
+        h.process();
+        ed.refreshNow();
+        check (printWord (h.p->getEngineStatus().walk.word).c_str() == std::string ("R +M3") && soundingOn (h, 2) == voiced ("R +M3", { 60, 64, 67 }),
+               "Walk: R and +M3 from the palette walk the held chord (" + text (soundingOn (h, 2)) + ")");
+        wb.appendOp (ops::majorThirdDown);
+        h.process();
+        check (printWord (h.p->getEngineStatus().walk.word).c_str() == std::string ("R"), "\xe2\x88\x92M3 after +M3 cancels, as an operator key would");
+        // Orbit with a factory cycle: read only.
+        setPlain (*h.p, params::mode, 2.0f);
+        ed.refreshNow();
+        check (! wb.editable() && printWord (wb.shownWord()).c_str() == std::string ("P L"), "Orbit (cycle PL): the bar shows the cycle, read only");
+    }
+
+    // Spelling and numerals in the key (§3.6), In key on the ghosts, and the key band.
+    void testKeyOnLattice()
+    {
+        std::cout << "key on the lattice" << std::endl;
+        MiniHost h;
+        setPlain (*h.p, params::gatherMs, 0.0f);
+        setPlain (*h.p, params::mode, 1.0f);
+        setPlain (*h.p, params::key, 2.0f);
+        setPlain (*h.p, params::keyTonic, 3.0f);              // E♭ minor (as held): C♭ is its sixth
+        setPlain (*h.p, params::keyMinor, 1.0f);
+        std::unique_ptr<juce::AudioProcessorEditor> e (h.p->createEditor());
+        auto& ed = editorOf (e);
+        ed.freezeAnimation (true);
+        h.process (chordOn ({ 59, 63, 66 }));                 // B D♯ F♯, which E♭ minor spells C♭ E♭ G♭
+        h.process();
+        ed.refreshNow();
+        const auto& lat = ed.latticeView();
+        const Vec camera { (int) std::lround (lat.geometry().camera().a), (int) std::lround (lat.geometry().camera().b) };
+        const auto label = lat.nodeLabel (nearestNode (11, nearestNode (3, camera)));
+        check (label == juce::String::fromUTF8 ("C\xe2\x99\xad") && ed.model().source.name == juce::String::fromUTF8 ("C\xe2\x99\xad") && ed.model().source.numeral == "VI",
+               "E\xe2\x99\xad minor: the node a third below the tonic is C\xe2\x99\xad, not B, and the chord is C\xe2\x99\xad (VI): " + label + ", "
+               + ed.model().source.name + " (" + ed.model().source.numeral + ")");
+        check (ed.model().keyText == juce::String::fromUTF8 ("E\xe2\x99\xad minor held") || ed.model().keyText == juce::String::fromUTF8 ("E\xe2\x99\xad minor"),
+               "the key is named E\xe2\x99\xad minor: " + ed.model().keyText);
+        std::set<juce::String> labels;
+        int aLo, aHi, bLo, bHi;
+        lat.geometry().visible (aLo, aHi, bLo, bHi, 0.0);
+        for (int b = bLo; b <= bHi; ++b)
+            for (int a = aLo; a <= aHi; ++a)
+                labels.insert (lat.nodeLabel ({ a, b }));
+        bool noTriple = true;
+        for (const auto& l : labels)
+            noTriple = noTriple && ! l.contains (juce::String::fromUTF8 ("\xe2\x99\xad\xe2\x99\xad\xe2\x99\xad")) && ! l.contains (juce::String::fromUTF8 ("\xe2\x99\xaf\xe2\x99\xaf\xe2\x99\xaf"));
+        check (noTriple && labels.size() > 12, "every node in view is spelled with at most a double accidental (" + juce::String ((int) labels.size()) + " spellings)");
+
+        // Root-position names don't take the lowest pitch class as the bass (the Live check
+        // showed A C E named C6).
+        check (ed.model().chordName (minorTriadMask (9), -1) == "Am" && ed.model().longChordName (minorTriadMask (9)) == "A minor"
+                   && ed.model().chordName ((PcMask) (majorTriadMask (8) | pcBit (7)), -1) == juce::String::fromUTF8 ("A\xe2\x99\xadmaj7"),
+               "A C E is Am (A minor), not C6; A\xe2\x99\xad C E\xe2\x99\xad G is A\xe2\x99\xadmaj7: " + ed.model().chordName (minorTriadMask (9), -1));
+
+        // In key: C major held, the ghosts in the key are solid, the rest faint, exactly opsInKey.
+        setPlain (*h.p, params::keyTonic, 0.0f);
+        setPlain (*h.p, params::keyMinor, 0.0f);
+        setPlain (*h.p, params::inKey, 1.0f);
+        juce::MidiBuffer offs;
+        for (int n : { 59, 63, 66 })
+            offs.addEvent (juce::MidiMessage::noteOff (1, n), 0);
+        h.process (offs);
+        h.process (chordOn ({ 60, 64, 67 }));
+        h.process();
+        ed.refreshNow();
+        const auto bits = opsInKey (h.p->getEngineStatus().generated, KeyRef { 0, false });
+        bool exact = true;
+        int solid = 0;
+        for (const auto& g : ed.model().ghosts)
+        {
+            exact = exact && g.inKey == ((bits >> g.key & 1u) != 0) && g.faint == ! g.inKey;
+            solid += g.inKey ? 1 : 0;
+        }
+        check (exact && solid == 4, "In key, C major in C major: the ghosts marked in the key are exactly opsInKey (" + juce::String (solid)
+               + ": L R +5 -5), the others faint");
+        setPlain (*h.p, params::inKey, 0.0f);
+        ed.refreshNow();
+        bool noneFaint = true;
+        for (const auto& g : ed.model().ghosts)
+            noneFaint = noneFaint && ! g.faint;
+        check (noneFaint, "In key off: no ghost is faint");
+    }
+
+    // No allocation on the audio thread while the editor sends notes, ghost clicks and words.
+    void testEditorRealtime()
+    {
+        std::cout << "editor, real time" << std::endl;
+        MiniHost h;
+        setPlain (*h.p, params::gatherMs, 0.0f);
+        setPlain (*h.p, params::mode, 1.0f);
+        std::unique_ptr<juce::AudioProcessorEditor> e (h.p->createEditor());
+        auto& ed = editorOf (e);
+        ed.freezeAnimation (true);
+        h.process();
+        Word w;
+        parseWord ("P L R", w);
+        int allocations = 0;
+        for (int round = 0; round < 40; ++round)
+        {
+            // The message thread queues (allocation there is fine), then a block runs under the hook.
+            const int root = 48 + round % 12;
+            h.p->sendEditorCommand (EditorCommand::noteOn (root, 90));
+            h.p->sendEditorCommand (EditorCommand::noteOn (root + 4, 90));
+            h.p->sendEditorCommand (EditorCommand::noteOn (root + 7, 90));
+            h.p->sendEditorCommand (EditorCommand::operatorKey (round % 10));
+            if (round % 5 == 0)
+                h.p->sendEditorCommand (EditorCommand::setWalk (w));
+            {
+                AllocWatch watch;
+                allocCount = 0;
+                h.process();
+                allocations += allocCount.load();
+            }
+            h.p->sendEditorCommand (EditorCommand::noteOff (root));
+            h.p->sendEditorCommand (EditorCommand::noteOff (root + 4));
+            h.p->sendEditorCommand (EditorCommand::noteOff (root + 7));
+            {
+                AllocWatch watch;
+                allocCount = 0;
+                h.process();
+                allocations += allocCount.load();
+            }
+            ed.refreshNow();
+        }
+        check (allocations == 0, "no allocation in processBlock while the editor plays chords, clicks ghosts and sets W (" + juce::String (allocations) + ")");
+        check (h.sounding() == 0, "nothing left sounding");
+
+        // A full queue refuses; the commands already in it all arrive.
+        TonnetzProcessor q;
+        int queued = 0;
+        while (q.sendEditorCommand (EditorCommand::operatorKey (0)))
+            ++queued;
+        check (queued == EditorCommandFifo::capacity, "the command queue holds " + juce::String (queued) + " and then refuses");
+
+        // A press and release in one block keep their order (one sample apart).
+        MiniHost r;
+        setPlain (*r.p, params::gatherMs, 0.0f);
+        setPlain (*r.p, params::mix, 2.0f);
+        r.process();
+        r.p->sendEditorCommand (EditorCommand::noteOn (62, 100));
+        r.p->sendEditorCommand (EditorCommand::noteOff (62));
+        r.process();
+        check (r.notes.size() == 2 && r.notes[0].velocity > 0 && r.notes[1].velocity == 0 && r.notes[1].sample == r.notes[0].sample + 1,
+               "an editor note pressed and let go within one block sounds, then ends, a sample later");
+    }
 }
 
 int main (int argc, char* argv[])
@@ -941,6 +1544,12 @@ int main (int argc, char* argv[])
     }
 
     testEditor (fixtures, output);
+    testLatticeImages (fixtures, output);
+    testDirectPlay();
+    testControls();
+    testWordBar();
+    testKeyOnLattice();
+    testEditorRealtime();
     testThrough();
     testRig (output);
     testParams();

@@ -1,4 +1,5 @@
-// TonnetzML's processor. Phase 3 (PLAN.md §6): Mirror, Walk, Orbit and the key. The host's notes
+// TonnetzML's processor. Phases 2-4 (PLAN.md §6): Mirror, Walk, Orbit, the key, and the lattice
+// editor's commands (EditorCommands.h: its notes join the host's input). The host's notes
 // (and the test rig's keys, §7.3, as if they came from the host) go through the LatticeEngine:
 // every chord comes out as W(chord), W the slot's word (Mirror), the word the operator keys walk
 // (Walk, Explore) or a cycle stepped on the host's grid (Orbit). The key listener hears the
@@ -11,6 +12,7 @@
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include "../core/engine/EditorCommands.h"
 #include "../core/engine/LatticeEngine.h"
 #include "../core/engine/MidiEvents.h"
 #include "../core/engine/SnapshotExchange.h"
@@ -67,6 +69,26 @@ namespace tonnetz
         uint64_t keyGuess = 0;             // KeyGuess::pack()
         int keyTonic = -1;                 // the key in force (KeyRef), -1 = none
         bool keyMinor = false;
+
+        // Phase 4, for the editor: what sounds, note by note (velocity, 0 = silent), the chord
+        // and W(chord) with W's anchor (LatticeEngine::sourceChord, generatedChord), and the
+        // engine's release count (it forgot every key: the editor forgets the ones it holds).
+        std::array<uint8_t, 128> sourceVelocity {}, generatedVelocity {};
+        Chord source, generated;
+        uint32_t releases = 0;
+    };
+
+    // The editor's view (PLAN.md §5): kept by the processor so it outlives the editor window.
+    // Message thread. (Saved with the set in Phase 6, with the camera.)
+    struct EditorView
+    {
+        bool dark = false;                 // the paper theme by default
+        bool follow = true;                // the camera eases to keep the chords in view
+        bool sticky = true;                // mouse-played keys and triangles stay down until released
+        bool showSettings = true;          // the settings column on the lattice
+        double zoom = 1.0;                 // times the size-dependent default spacing
+        double centreA = 0.75, centreB = 0.5;   // the camera, in lattice coordinates
+        int computerOctave = 5;            // the computer keyboard's lower C: MIDI 12 * this (60 = C3 in Live)
     };
 
     // A restored W and latched chord for the audio thread.
@@ -131,6 +153,13 @@ namespace tonnetz
         EngineStatus getEngineStatus() const;
 
         //======================================================================
+        // The editor (Phase 4). Message thread only (one producer).
+
+        // Queues a command for the audio thread (EditorCommands.h): false if the queue is full.
+        bool sendEditorCommand (const EditorCommand& c) noexcept { return editorCommands.push (c); }
+        EditorView& editorView() noexcept { return view; }
+
+        //======================================================================
         // The test rig (PLAN.md §7.3). Message thread.
 
         // ~/Music/TonnetzML/TestRig: Keys.txt is read from it, Status.txt written to it.
@@ -188,6 +217,8 @@ namespace tonnetz
         std::atomic<double> preparedSampleRate { 44100.0 };
 
         // Message thread → audio thread.
+        EditorCommandFifo editorCommands;
+        EditorView view;
         SnapshotExchange<RigKeys> rigKeysForAudio;
         SnapshotExchange<SlotWords> slotWordsForAudio;
         SnapshotExchange<WalkRestore> walkForAudio;

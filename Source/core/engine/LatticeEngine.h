@@ -9,7 +9,7 @@
 //                  or the voicing settings changing while the chord sounds) retunes only the
 //                  voices whose pitch changed (note-off, note-on), on the sample it happens.
 //   W, by mode     Mirror: the slot's word. Walk and Explore: the engine's own word, edited by
-//                  the operator keys (WordEditor.h; Explore's editor clicks arrive in Phase 4).
+//                  the operator keys (WordEditor.h) and the editor's ghost clicks and word bar.
 //                  Orbit: a cycle word (PL, PR, LR, PLR or the slot's word) stepped one op every
 //                  Rate (OrbitClock.h) while a chord sounds: W is the cycle's first k ops, k
 //                  counted modulo the cycle's length on the chord (Cycles.h), so it runs for ever.
@@ -49,6 +49,11 @@
 //                  they come, are ignored.
 //   Mix, channel or mode changes end what sounds and sound the chord again under the new
 //   settings.
+//   the editor     (Phase 4) its notes come in as input like the host's (the processor puts them
+//                  there); its ghost-neighbour clicks (`editorOperator`) and word-bar edits of
+//                  Walk's W (`editorSetWalk`) are taken at the start of the next block, on its
+//                  first sample, as an operator key would be. What it draws comes from
+//                  `sourceChord`, `generatedChord` and `forEachGenerated`.
 //
 // Events come out in sample order; on one sample, in the order they happened. Plain C++, no JUCE, no
 // allocation, no locks: the whole engine is one fixed-size object.
@@ -163,6 +168,7 @@ namespace tonnetz
         template <class Out>
         void releaseAll (int sample, Out& out) noexcept
         {
+            ++releaseCount;
             tracker.releaseAll (sample, out);
             for (int ch = 0; ch < 16; ++ch)
                 for (int n = 0; n < 128; ++n)
@@ -227,6 +233,7 @@ namespace tonnetz
             copySettings (s);
             if (s.enabled && s.latch && t.playing && wake)
                 wakeLatched (0, s, out);
+            takeEditorCommands (s);
 
             if (! s.enabled)
             {
@@ -317,6 +324,53 @@ namespace tonnetz
         }
 
         uint32_t orbitStep() const noexcept { return orbitK; }
+
+        // ---- The editor (Phase 4) ----------------------------------------------------------
+        // Operator key `index` (0..11), as a ghost-neighbour click: taken on the next block's
+        // first sample, as the key would be (whether or not the zone is on).
+        void editorOperator (int index) noexcept
+        {
+            if (index >= 0 && index < numOperatorKeys && numPendingOps < (int) pendingOps.size())
+                pendingOps[(size_t) numPendingOps++] = (int8_t) index;
+        }
+
+        // Walk / Explore's W replaced (the word bar), on the next block's first sample.
+        void editorSetWalk (const Word& w) noexcept
+        {
+            pendingWalk = w;
+            pendingWalkSet = true;
+        }
+
+        // The chord the source keys make (anchored at its root, as the engine takes it), and
+        // W(chord) as last evaluated, with its anchor and parity: the editor's ghost neighbours
+        // are one op from it. Meaningful while the source mask isn't empty; computed under
+        // every Mix (Source only keeps the lattice live).
+        Chord sourceChord() const noexcept
+        {
+            unsigned mask = 0;
+            int lowest = -1;
+            for (int k = 0; k < 128; ++k)
+                if (gatherer.isHeld (k))
+                {
+                    mask |= pcBit (k);
+                    lowest = lowest < 0 ? k : lowest;
+                }
+            return makeChord (mask, chordRoot (mask, lowest >= 0 ? mod12 (lowest) : -1));
+        }
+        const Chord& generatedChord() const noexcept { return genChord; }
+
+        // Every generated note sounding: f (pitch, velocity).
+        template <class F>
+        void forEachGenerated (F&& f) const noexcept
+        {
+            for (int o = 0; o < owner::count; ++o)
+                if (bound[(size_t) o] >= 0)
+                    f ((int) bound[(size_t) o], (int) boundVelocity[(size_t) o]);
+        }
+
+        // How many times everything was ended (stop, Enable off, releaseAll): the editor forgets
+        // the keys it holds when this moves, since the engine has forgotten them.
+        uint32_t releases() const noexcept { return releaseCount; }
 
     private:
         static constexpr int never = 1 << 30;
@@ -574,6 +628,23 @@ namespace tonnetz
                 out.push (e);
         }
 
+        // The editor's operator clicks and W edits, on the block's first sample (enabled only).
+        void takeEditorCommands (const EngineSettings& s) noexcept
+        {
+            if (s.enabled)
+            {
+                for (int i = 0; i < numPendingOps; ++i)
+                    operatorKey (pendingOps[(size_t) i], 0, s);
+                if (pendingWalkSet && (s.mode == Mode::Walk || s.mode == Mode::Explore) && ! (pendingWalk == walk))
+                {
+                    walk = pendingWalk;
+                    markDirty (0);
+                }
+            }
+            numPendingOps = 0;
+            pendingWalkSet = false;
+        }
+
         // A source key goes down with none down.
         void newChord (int sample, const EngineSettings& s) noexcept
         {
@@ -704,19 +775,6 @@ namespace tonnetz
                     input.push (k, k);
         }
 
-        Chord sourceChord() const noexcept
-        {
-            unsigned mask = 0;
-            int lowest = -1;
-            for (int k = 0; k < 128; ++k)
-                if (gatherer.isHeld (k))
-                {
-                    mask |= pcBit (k);
-                    lowest = lowest < 0 ? k : lowest;
-                }
-            return makeChord (mask, chordRoot (mask, lowest >= 0 ? mod12 (lowest) : -1));
-        }
-
         template <class Out>
         void releaseOwner (int o, int sample, Out& out) noexcept
         {
@@ -770,21 +828,23 @@ namespace tonnetz
                 loudest = gatherer.velocity (v.owner) > loudest ? gatherer.velocity (v.owner) : loudest;
 
             target.fill (-1);
-            if (input.count > 0 && s.hasGenerated())
+            genChord = {};
+            if (input.count > 0)
             {
                 const Chord start = inputChord (input);
                 if (s.mode == Mode::Orbit)
                 {
                     const Word& c = cycleWord (s);
-                    voiceOps (orbitOps (c, start), [&c] (int i) { return c[i % c.size]; }, start, input, s.voicing, output, nullptr);
+                    genChord = voiceOps (orbitOps (c, start), [&c] (int i) { return c[i % c.size]; }, start, input, s.voicing, output, nullptr);
                 }
                 else
                 {
-                    voiceWord (s.mode == Mode::Mirror ? s.word : walk, start, input, s.voicing, output);
+                    genChord = voiceWord (s.mode == Mode::Mirror ? s.word : walk, start, input, s.voicing, output);
                 }
-                for (const auto& v : output)
-                    if (v.owner < owner::count)
-                        target[v.owner] = (int16_t) v.pitch;
+                if (s.hasGenerated())
+                    for (const auto& v : output)
+                        if (v.owner < owner::count)
+                            target[v.owner] = (int16_t) v.pitch;
             }
 
             for (int o = 0; o < owner::count; ++o)
@@ -797,7 +857,10 @@ namespace tonnetz
                     continue;
                 const int velocity = o < 128 ? gatherer.velocity (o) : loudest;
                 if (tracker.start ((VoiceTracker::Source) genSource (o), s.genChannel, p, velocity, sample, out))
+                {
                     bound[(size_t) o] = (int16_t) p;
+                    boundVelocity[(size_t) o] = (uint8_t) velocity;
+                }
             }
             refreshGenerated();
         }
@@ -823,6 +886,7 @@ namespace tonnetz
         KeyListener listener;
         std::array<int16_t, owner::count> bound {};     // each owner's sounding pitch, or -1
         std::array<int16_t, owner::count> target {};
+        std::array<uint8_t, owner::count> boundVelocity {};   // the velocity each bound voice started with
         std::array<uint8_t, 16 * 128> rawOn {};          // Enable off: notes passed through
         std::array<uint8_t, 128> sleeping {};            // a latched chord, silent (velocities)
         std::array<Word, 4> cycles {};                   // PL, PR, LR, PLR
@@ -837,6 +901,14 @@ namespace tonnetz
         double seconds = 0.0, blockSeconds = 0.0, rate = 44100.0;
         PcMask genMask = 0;
         int genLowest = -1;
+        Chord genChord;                                  // W(chord) as last evaluated
+        uint32_t releaseCount = 0;
+
+        // The editor's commands, taken at the next block's start.
+        std::array<int8_t, 64> pendingOps {};
+        int numPendingOps = 0;
+        Word pendingWalk;
+        bool pendingWalkSet = false;
 
         // periodOf's cache.
         mutable Word periodWord;

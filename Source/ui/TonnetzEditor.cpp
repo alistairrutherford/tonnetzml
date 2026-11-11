@@ -3,137 +3,188 @@
 
 namespace tonnetz
 {
-    namespace
-    {
-        const juce::Colour paper (0xfff4efe4), ink (0xff1f2a30), faint (0xff6b767c), vermilion (0xffc8452c);
-    }
-
     TonnetzEditor::TonnetzEditor (TonnetzProcessor& p)
-        : AudioProcessorEditor (p), processor (p)
+        : AudioProcessorEditor (p), processor (p),
+          notes (p),
+          lattice (p, picture, notes),
+          keyboard (p, picture, notes),
+          word (p, picture),
+          head (p, picture, [this] { setDark (! processor.editorView().dark); }),
+          side (p, [this] { if (constructed) layoutFloating(); })
     {
         setOpaque (true);
-
-        word.setFont (juce::FontOptions (20.0f));
-        word.setJustification (juce::Justification::centred);
-        word.setColour (juce::TextEditor::backgroundColourId, juce::Colours::white);
-        word.setColour (juce::TextEditor::textColourId, ink);
-        word.setColour (juce::TextEditor::outlineColourId, faint);
-        word.setColour (juce::TextEditor::focusedOutlineColourId, ink);
-        word.setTextToShowWhenEmpty ("(no ops: the chord as played)", faint);
-        word.onReturnKey = [this] { commitWord(); };
-        word.onFocusLost = [this] { commitWord(); };
-        word.onEscapeKey = [this] { shownSlot = -1; showSlot(); };
+        setWantsKeyboardFocus (true);
+        addAndMakeVisible (lattice);
+        addAndMakeVisible (keyboard);
         addAndMakeVisible (word);
+        addAndMakeVisible (head);
+        addAndMakeVisible (side);
+        lattice.onFocusWanted = [this]
+        {
+            if (auto* pal = word.palette())
+                pal->setVisible (false);
+            grabKeyboardFocus();
+        };
 
         setResizable (true, true);
         setResizeLimits (minWidth, minHeight, 2400, 1600);
         setSize (minWidth, minHeight);
-        showSlot();
-        refreshStatus();
-        startTimerHz (10);
+        constructed = true;
+        refreshNow();
+        resized();
+        lastTick = juce::Time::getMillisecondCounterHiRes() * 0.001;
+        startTimerHz (60);
     }
 
     TonnetzEditor::~TonnetzEditor()
     {
         stopTimer();
+        notes.releaseAll();
     }
 
-    void TonnetzEditor::showSlot()
+    void TonnetzEditor::setDark (bool dark)
     {
-        const int slot = processor.currentSlot();
-        if (slot == shownSlot)
-            return;
-        shownSlot = slot;
-        word.setText (juce::String::fromUTF8 (printWord (processor.getSlotWord (slot)).c_str()), false);
-        message = {};
-        messageIsError = false;
+        processor.editorView().dark = dark;
+        themeChanged();
+    }
+
+    void TonnetzEditor::themeChanged()
+    {
+        head.refresh();
+        side.refresh();
+        word.refresh();
+        keyboard.refresh();
         repaint();
+        lattice.repaint();
     }
 
-    void TonnetzEditor::commitWord()
+    void TonnetzEditor::freezeAnimation (bool frozen)
     {
-        const int slot = processor.currentSlot();
-        if (processor.setSlotWordText (slot, word.getText()))
-        {
-            const auto stored = juce::String::fromUTF8 (printWord (processor.getSlotWord (slot)).c_str());
-            word.setText (stored, false);
-            message = "Slot " + TonnetzProcessor::slotName (slot) + " stored";
-            messageIsError = false;
-            shownSlot = slot;
-        }
+        lattice.freezeAnimation (frozen);
+        if (frozen)
+            stopTimer();
         else
-        {
-            message = "Not a word. Ops: P L R N S H +5 -5 +M3 -M3 +m3 -m3 T(a,b) Flip(i,j) Pivot(i) Grow(i,j) Shrink";
-            messageIsError = true;
-        }
-        repaint();
+            startTimerHz (60);
     }
 
-    // "Walk · W = P L · D major 90%": the mode, W as it stands, the key (hollow ◦ while tentative).
-    void TonnetzEditor::refreshStatus()
+    juce::Array<ui::HudControl*> TonnetzEditor::controls()
     {
-        const auto s = processor.getEngineStatus();
-        const int mode = juce::jlimit (0, 3, (int) std::lround (processor.getState().getRawParameterValue (params::mode)->load()));
-        // Mirror's W is the slot's word, whether or not the audio thread has run yet.
-        juce::String w = juce::String::fromUTF8 (printWord (mode == (int) Mode::Mirror ? processor.getSlotWord (processor.currentSlot()) : s.current).c_str());
-        if (mode != (int) Mode::Mirror && s.currentOps > s.current.size)
-            w << juce::String::fromUTF8 (" \u2026 (") << s.currentOps << " ops)";
-        const auto g = KeyGuess::unpack (s.keyGuess);
-        juce::String key = "no key";
-        if (s.keyTonic >= 0)
-            key = juce::String (guessKeyName (s.keyTonic, s.keyMinor)) + (s.keyMinor ? " minor" : " major");
-        if (g.has() && g.tonic == s.keyTonic && g.minor == s.keyMinor)
-            key << " " << g.fit << "%" << (g.state == GuessState::Confident ? "" : " ?");
-        const auto dot = juce::String::fromUTF8 ("  \u00b7  ");
-        const auto line = juce::String (modeNames[mode]) + dot + "W = " + (w.isEmpty() ? juce::String ("(none)") : w) + dot + key;
-        if (line != engineLine)
+        juce::Array<ui::HudControl*> out;
+        head.controls (out);
+        side.controls (out);
+        out.add (&word.slotChoices());
+        return out;
+    }
+
+    ui::HudControl* TonnetzEditor::controlFor (const juce::String& id)
+    {
+        for (auto* c : controls())
+            if (c->getComponentID() == id)
+                return c;
+        return nullptr;
+    }
+
+    void TonnetzEditor::refreshNow()
+    {
+        const auto status = processor.getEngineStatus();
+        if (! haveReleases)
         {
-            engineLine = line;
-            repaint();
+            lastReleases = status.releases;
+            haveReleases = true;
+        }
+        else if (status.releases != lastReleases)
+        {
+            // The engine let go of everything: it ignores the note-offs that would follow.
+            lastReleases = status.releases;
+            notes.forget();
+            lattice.forget();
+            keyboard.forget();
+        }
+
+        auto& state = processor.getState();
+        const auto value = [&state] (const char* id) { return state.getRawParameterValue (id)->load(); };
+        ui::LatticeModel::Inputs in;
+        in.status = status;
+        in.mode = juce::jlimit (0, 3, (int) std::lround (value (params::mode)));
+        in.slotWord = processor.getSlotWord (processor.currentSlot());
+        in.orbitCycle = juce::jlimit (0, 4, (int) std::lround (value (params::orbitCycle)));
+        in.inKey = value (params::inKey) > 0.5f;
+        in.keyMode = juce::jlimit (0, 2, (int) std::lround (value (params::key)));
+        in.voicing.reg = (Register) juce::jlimit (0, 1, (int) std::lround (value (params::registerMode)));
+        const bool changed = picture.update (in);
+        if (changed)
+        {
+            lattice.modelChanged();
+            keyboard.refresh();
+            word.refresh();
+            head.refresh();
+        }
+        // Parameters can change from the host at any time: the labels re-read them (cheap).
+        if (changed || ++ticks % 6 == 0)
+        {
+            head.refresh();
+            side.refresh();
+            word.refresh();
+            keyboard.refresh();
         }
     }
 
     void TonnetzEditor::timerCallback()
     {
-        refreshStatus();
-        if (! word.hasKeyboardFocus (true))
-            showSlot();
-        else if (processor.currentSlot() != shownSlot)
-        {
-            shownSlot = -1;              // the slot changed while typing: show the new slot's word
-            showSlot();
-        }
+        refreshNow();
+        const double now = juce::Time::getMillisecondCounterHiRes() * 0.001;
+        lattice.tick (juce::jlimit (0.0, 0.1, now - lastTick));
+        lastTick = now;
+    }
+
+    void TonnetzEditor::layoutFloating()
+    {
+        const auto lat = lattice.getBounds();
+        const auto pref = side.preferredSize();
+        side.setBounds (lat.getRight() - pref.getWidth() - 4, lat.getY() + 4, pref.getWidth(), pref.getHeight());
+        word.setBounds (lat.getX(), lat.getBottom() - 22 - word.preferredHeight(), lat.getWidth(), word.preferredHeight());
     }
 
     void TonnetzEditor::resized()
     {
-        const auto b = getLocalBounds();
-        word.setBounds (b.getCentreX() - 180, b.getCentreY() + 10, 360, 36);
+        auto r = getLocalBounds();
+        head.setBounds (r.removeFromTop (headerHeight));
+        const int keysHeight = ui::KeyboardStrip::barHeight + juce::jlimit (56, 96, getHeight() / 9);
+        keyboard.setBounds (r.removeFromBottom (keysHeight));
+        lattice.setBounds (r);
+        layoutFloating();
     }
 
     void TonnetzEditor::paint (juce::Graphics& g)
     {
-        g.fillAll (paper);
-        const auto b = getLocalBounds();
-        g.setColour (ink);
-        g.setFont (juce::FontOptions (34.0f));
-        g.drawText ("TonnetzML", b.withHeight (b.getCentreY() - 70).withY (0).withTrimmedTop (b.getCentreY() - 140), juce::Justification::centredBottom);
+        const auto& k = ui::Ink::of (processor.editorView().dark);
+        g.fillAll (k.ground);
+        // The header's rule: one ink line, as on a page.
+        g.setColour (k.line.withAlpha (0.8f));
+        g.fillRect (0.0f, (float) headerHeight - 1.0f, (float) getWidth(), 1.0f);
+    }
 
-        g.setFont (juce::FontOptions (14.0f));
-        g.setColour (faint);
-        g.drawText ("Every chord comes out as W(chord): Mirror, Walk (operator keys), Orbit. The lattice arrives in Phase 4.",
-                    juce::Rectangle<int> (0, b.getCentreY() - 62, b.getWidth(), 20), juce::Justification::centred);
-        g.setColour (ink);
-        g.drawText (engineLine, juce::Rectangle<int> (0, b.getCentreY() + 100, b.getWidth(), 20),
-                    juce::Justification::centred);
+    bool TonnetzEditor::keyPressed (const juce::KeyPress& k)
+    {
+        if (k == juce::KeyPress::escapeKey)
+        {
+            lattice.releaseLattice();
+            notes.releaseHolder (ui::EditorNotes::mouseKeys);
+            if (auto* pal = word.palette())
+                pal->setVisible (false);
+            keyboard.refresh();
+            return true;
+        }
+        if (k == juce::KeyPress::backspaceKey)
+        {
+            word.undo();
+            return true;
+        }
+        return keyboard.keyPressed (k);
+    }
 
-        g.setColour (ink);
-        g.setFont (juce::FontOptions (16.0f));
-        g.drawText ("Slot " + TonnetzProcessor::slotName (shownSlot < 0 ? 0 : shownSlot) + " word",
-                    juce::Rectangle<int> (0, b.getCentreY() - 22, b.getWidth(), 24), juce::Justification::centred);
-
-        g.setFont (juce::FontOptions (13.0f));
-        g.setColour (messageIsError ? vermilion : faint);
-        g.drawFittedText (message, juce::Rectangle<int> (20, b.getCentreY() + 56, b.getWidth() - 40, 36), juce::Justification::centredTop, 2);
+    bool TonnetzEditor::keyStateChanged (bool)
+    {
+        return keyboard.keyStateChanged();
     }
 }

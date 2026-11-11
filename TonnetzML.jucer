@@ -26,6 +26,7 @@
         <FILE id="tzF058" name="KeyListener.h" compile="0" resource="0" file="Source/core/engine/KeyListener.h"/>
         <FILE id="tzF059" name="OrbitClock.h" compile="0" resource="0" file="Source/core/engine/OrbitClock.h"/>
         <FILE id="tzF060" name="WordEditor.h" compile="0" resource="0" file="Source/core/engine/WordEditor.h"/>
+        <FILE id="tzF061" name="EditorCommands.h" compile="0" resource="0" file="Source/core/engine/EditorCommands.h"/>
       </GROUP>
       <GROUP id="tzGrp4" name="core/lattice">
         <FILE id="tzF031" name="Lattice.h" compile="0" resource="0" file="Source/core/lattice/Lattice.h"/>
@@ -39,6 +40,7 @@
         <FILE id="tzF042" name="ChordNamer.h" compile="0" resource="0" file="Source/core/theory/ChordNamer.h"/>
         <FILE id="tzF043" name="KeyProfiles.h" compile="0" resource="0" file="Source/core/theory/KeyProfiles.h"/>
         <FILE id="tzF044" name="KeyBand.h" compile="0" resource="0" file="Source/core/theory/KeyBand.h"/>
+        <FILE id="tzF045" name="RomanNumeral.h" compile="0" resource="0" file="Source/core/theory/RomanNumeral.h"/>
       </GROUP>
       <GROUP id="tzGrp2" name="plugin">
         <FILE id="tzF011" name="TonnetzProcessor.h" compile="0" resource="0" file="Source/plugin/TonnetzProcessor.h"/>
@@ -47,6 +49,19 @@
       <GROUP id="tzGrp3" name="ui">
         <FILE id="tzF021" name="TonnetzEditor.h" compile="0" resource="0" file="Source/ui/TonnetzEditor.h"/>
         <FILE id="tzF022" name="TonnetzEditor.cpp" compile="1" resource="0" file="Source/ui/TonnetzEditor.cpp"/>
+        <FILE id="tzF023" name="Ink.h" compile="0" resource="0" file="Source/ui/Ink.h"/>
+        <FILE id="tzF024" name="LatticeGeometry.h" compile="0" resource="0" file="Source/ui/LatticeGeometry.h"/>
+        <FILE id="tzF025" name="LatticeModel.h" compile="0" resource="0" file="Source/ui/LatticeModel.h"/>
+        <FILE id="tzF026" name="LatticeModel.cpp" compile="1" resource="0" file="Source/ui/LatticeModel.cpp"/>
+        <FILE id="tzF027" name="EditorNotes.h" compile="0" resource="0" file="Source/ui/EditorNotes.h"/>
+        <FILE id="tzF028" name="Hud.h" compile="0" resource="0" file="Source/ui/Hud.h"/>
+        <FILE id="tzF029" name="Hud.cpp" compile="1" resource="0" file="Source/ui/Hud.cpp"/>
+        <FILE id="tzF070" name="LatticeView.h" compile="0" resource="0" file="Source/ui/LatticeView.h"/>
+        <FILE id="tzF071" name="LatticeView.cpp" compile="1" resource="0" file="Source/ui/LatticeView.cpp"/>
+        <FILE id="tzF072" name="KeyboardStrip.h" compile="0" resource="0" file="Source/ui/KeyboardStrip.h"/>
+        <FILE id="tzF073" name="KeyboardStrip.cpp" compile="1" resource="0" file="Source/ui/KeyboardStrip.cpp"/>
+        <FILE id="tzF074" name="WordBar.h" compile="0" resource="0" file="Source/ui/WordBar.h"/>
+        <FILE id="tzF075" name="WordBar.cpp" compile="1" resource="0" file="Source/ui/WordBar.cpp"/>
       </GROUP>
     </GROUP>
   </MAINGROUP>

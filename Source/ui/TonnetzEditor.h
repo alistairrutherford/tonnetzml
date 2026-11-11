@@ -1,9 +1,18 @@
-// TonnetzML's editor. Phase 3: still a stub (the lattice editor of PLAN.md §5 arrives in Phase 4),
-// with one text field, the current slot's word (Return, or leaving the field, stores it; text
-// that isn't a word is shown in red and not stored), and a line saying what the engine is doing:
-// the mode, W as it stands and the key. Nothing here comes from the sibling plug-ins' UI.
+// TonnetzML's editor (PLAN.md §5, Phase 4): the lattice is the whole window. A header line
+// (name, Enable, the mode, the key, the sentence `Cmaj7 (I) ──P·L──► A♭maj7 (♭VI)`, the theme),
+// the lattice (LatticeView) with the settings column floating over its top-right corner and the
+// word bar over its foot, and the keyboard strip along the bottom. No panels, combo-box rows or
+// sliders; nothing comes from the sibling plug-ins' UI.
+//
+// The editor reads the engine's snapshot (TonnetzProcessor::getEngineStatus) on a 60 Hz timer
+// and writes commands (EditorCommands.h), never engine state.
 #pragma once
 
+#include "Hud.h"
+#include "KeyboardStrip.h"
+#include "LatticeModel.h"
+#include "LatticeView.h"
+#include "WordBar.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 
 namespace tonnetz
@@ -15,29 +24,51 @@ namespace tonnetz
     {
     public:
         static constexpr int minWidth = 760, minHeight = 520;
+        static constexpr int headerHeight = 38;
 
         explicit TonnetzEditor (TonnetzProcessor&);
         ~TonnetzEditor() override;
 
         void paint (juce::Graphics&) override;
         void resized() override;
+        bool keyPressed (const juce::KeyPress&) override;
+        bool keyStateChanged (bool isKeyDown) override;
 
-        // For tests: the word field, and what it says about the text.
-        juce::TextEditor& wordField() noexcept { return word; }
-        const juce::String& wordMessage() const noexcept { return message; }
-        const juce::String& statusLine() const noexcept { return engineLine; }
-        void refreshStatus();
-        void commitWord();
+        // For tests: take the snapshot now (what the timer does), and hold animation still.
+        void refreshNow();
+        void freezeAnimation (bool frozen);
+        void setDark (bool dark);
+
+        ui::LatticeView& latticeView() noexcept { return lattice; }
+        ui::KeyboardStrip& keyboardStrip() noexcept { return keyboard; }
+        ui::WordBar& wordBar() noexcept { return word; }
+        ui::Header& header() noexcept { return head; }
+        ui::Settings& settings() noexcept { return side; }
+        const ui::LatticeModel& model() const noexcept { return picture; }
+        ui::EditorNotes& editorNotes() noexcept { return notes; }
+
+        // Every parameter's control (its component ID is the parameter's ID), or nullptr.
+        ui::HudControl* controlFor (const juce::String& parameterID);
+        juce::Array<ui::HudControl*> controls();
 
     private:
         void timerCallback() override;
-        void showSlot();
+        void layoutFloating();
+        void themeChanged();
 
         TonnetzProcessor& processor;
-        juce::TextEditor word;
-        int shownSlot = -1;
-        juce::String message, engineLine;
-        bool messageIsError = false;
+        ui::LatticeModel picture;
+        ui::EditorNotes notes;
+        ui::LatticeView lattice;
+        ui::KeyboardStrip keyboard;
+        ui::WordBar word;
+        ui::Header head;
+        ui::Settings side;
+        juce::TooltipWindow tooltips { this, 600 };
+        uint32_t lastReleases = 0;
+        bool haveReleases = false, constructed = false;
+        int ticks = 0;
+        double lastTick = 0.0;
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TonnetzEditor)
     };

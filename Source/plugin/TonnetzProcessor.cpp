@@ -230,7 +230,27 @@ namespace tonnetz
         }
         for (const auto& e : rigEvents)
             engineIn.push (e);
-        if (rigEvents.size() > 0)
+        // The editor's commands (Phase 4): its notes as if the host sent them, one per sample
+        // from the block's start so that a press and its release keep their order; ghost clicks
+        // and W edits to the engine.
+        int editorNotes = 0;
+        while (const auto* c = editorCommands.peek())
+        {
+            if (c->type == EditorCommandType::NoteOn || c->type == EditorCommandType::NoteOff)
+            {
+                if (editorNotes >= numSamples || engineIn.space() < 2)
+                    break;                       // the rest next block
+                engineIn.push (c->type == EditorCommandType::NoteOn ? MidiEvent::noteOn (0, c->note, c->velocity, editorNotes)
+                                                                    : MidiEvent::noteOff (0, c->note, editorNotes));
+                ++editorNotes;
+            }
+            else if (c->type == EditorCommandType::Operator)
+                engine.editorOperator (c->index);
+            else
+                engine.editorSetWalk (c->word);
+            editorCommands.pop();
+        }
+        if (rigEvents.size() > 0 || editorNotes > 0)
             engineIn.sortBySample (true);
 
         // The settings, from the parameters (choices and ints are stored as their index / value).
@@ -283,6 +303,18 @@ namespace tonnetz
         const auto k = engine.currentKey();
         status.keyTonic = k.known() ? k.tonic : -1;
         status.keyMinor = k.minor;
+        const auto& keys = engine.keys();
+        for (int n = 0; n < 128; ++n)
+            status.sourceVelocity[(size_t) n] = (uint8_t) (keys.isHeld (n) ? keys.velocity (n) : 0);
+        status.generatedVelocity.fill (0);
+        engine.forEachGenerated ([this] (int pitch, int velocity)
+        {
+            if (pitch >= 0 && pitch < 128)
+                status.generatedVelocity[(size_t) pitch] = (uint8_t) juce::jmax ((int) status.generatedVelocity[(size_t) pitch], juce::jmax (1, velocity));
+        });
+        status.source = engine.sourceChord();
+        status.generated = engine.generatedChord();
+        status.releases = engine.releases();
         statusForMessage.publish (status);
     }
 

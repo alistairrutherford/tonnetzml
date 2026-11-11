@@ -10,6 +10,11 @@
         <FILE id="snF000" name="Main.cpp" compile="1" resource="0" file="Main.cpp"/>
         <FILE id="snF001" name="TonnetzProcessor.cpp" compile="1" resource="0" file="../../Source/plugin/TonnetzProcessor.cpp"/>
         <FILE id="snF002" name="TonnetzEditor.cpp" compile="1" resource="0" file="../../Source/ui/TonnetzEditor.cpp"/>
+        <FILE id="snF003" name="LatticeModel.cpp" compile="1" resource="0" file="../../Source/ui/LatticeModel.cpp"/>
+        <FILE id="snF004" name="Hud.cpp" compile="1" resource="0" file="../../Source/ui/Hud.cpp"/>
+        <FILE id="snF005" name="LatticeView.cpp" compile="1" resource="0" file="../../Source/ui/LatticeView.cpp"/>
+        <FILE id="snF006" name="KeyboardStrip.cpp" compile="1" resource="0" file="../../Source/ui/KeyboardStrip.cpp"/>
+        <FILE id="snF007" name="WordBar.cpp" compile="1" resource="0" file="../../Source/ui/WordBar.cpp"/>
     </GROUP>
   </MAINGROUP>
   <MODULES>
