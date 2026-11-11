@@ -4,6 +4,8 @@
 ones you play by moving them on the Tonnetz, the lattice of fifths and thirds, and sends them out
 as MIDI. The plan, with the theory, the design and the status of each phase, is [PLAN.md](PLAN.md).
 
+**Version 1.0.0** (2026-11-11). What's in it and the known limits: [CHANGELOG.md](CHANGELOG.md).
+
 ![The editor: the lattice, the word bar, the capture strip and the keyboard](docs/phase5-capture-strip.png)
 
 ## What it does
@@ -90,6 +92,18 @@ in memory for its whole session: restart Live to try a new build.
 
 To work on it in Xcode, open `TonnetzML.jucer` in Projucer and save, or use the generated
 `Builds/MacOSX/TonnetzML.xcodeproj`.
+
+### Release zip
+
+```bash
+Tools/release.sh --build
+```
+
+builds, signs the VST3 and the app with a Developer ID and the hardened runtime, notarizes and
+staples them, and writes `dist/TonnetzML-<version>-macOS.zip` (with a `.sha256`). It needs a
+"Developer ID Application" certificate and a notarytool keychain profile (`TonnetzML` by default;
+`Tools/release.sh --help` says how to make both) and stops with a list of what's missing if not.
+`--adhoc` makes `dist/TonnetzML-<version>-macOS-adhoc.zip` instead, signed ad hoc and not notarized.
 
 ## Tests
 

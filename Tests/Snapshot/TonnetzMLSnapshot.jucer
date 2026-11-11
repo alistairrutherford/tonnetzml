@@ -3,7 +3,7 @@
 <!-- The editor snapshot test (PLAN.md §7.2, Tests/run_snapshot.sh): a console app that
      compiles Source/plugin and Source/ui with the plug-in's defines (SnapshotDefines.h). -->
 <JUCERPROJECT id="TnzlSn" name="TonnetzMLSnapshot" projectType="consoleapp" useAppConfig="0"
-              addUsingNamespaceToJuceHeader="0" jucerFormatVersion="1" version="0.1.0"
+              addUsingNamespaceToJuceHeader="0" jucerFormatVersion="1" version="1.0.0"
               cppLanguageStandard="17">
   <MAINGROUP id="snMain" name="TonnetzMLSnapshot">
     <GROUP id="snSrc" name="Source">

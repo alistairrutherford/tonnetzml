@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <JUCERPROJECT id="TnzlPj" name="TonnetzML" projectType="audioplug" useAppConfig="0"
-              addUsingNamespaceToJuceHeader="0" jucerFormatVersion="1" version="0.1.0"
+              addUsingNamespaceToJuceHeader="0" jucerFormatVersion="1" version="1.0.0"
               companyName="Alistair Rutherford" companyWebsite="https://github.com/alistairrutherford"
               bundleIdentifier="com.alistairrutherford.tonnetzml"
               pluginFormats="buildVST3,buildStandalone" pluginCharacteristicsValue="pluginIsSynth,pluginWantsMidiIn,pluginProducesMidiOut"
