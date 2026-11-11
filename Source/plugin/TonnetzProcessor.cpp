@@ -50,6 +50,10 @@ namespace tonnetz
                                                                    juce::StringArray { "C", "C#/Db", "D", "Eb", "E", "F", "F#/Gb", "G", "Ab", "A", "Bb", "B" }, 0));
         layout.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { keyMinor, 1 }, "Key minor", false));
         layout.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { inKey, 1 }, "In key", false));
+
+        // Phase 5.
+        layout.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { capture, 1 }, "Capture", false));
+        layout.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { captureSource, 1 }, "Capture source", false));
         return layout;
     }
 
@@ -93,6 +97,8 @@ namespace tonnetz
         keyTonicParam = state.getRawParameterValue (params::keyTonic);
         keyMinorParam = state.getRawParameterValue (params::keyMinor);
         inKeyParam = state.getRawParameterValue (params::inKey);
+        captureParam = state.getRawParameterValue (params::capture);
+        captureSourceParam = state.getRawParameterValue (params::captureSource);
         lastKeyMode = (int) std::lround (keyParam->load());
         merged.ensureSize (65536);
         slotWords = factorySlotWords();
@@ -278,6 +284,20 @@ namespace tonnetz
 
         engine.process (transport, engineIn.begin(), engineIn.size(), numSamples, es, engineOut);
 
+        // The capture (PLAN.md §3.5): what went in and what came out.
+        {
+            CaptureSettings cs;
+            cs.enabled = enabled;
+            cs.capture = captureParam->load() > 0.5f;
+            cs.captureSource = captureSourceParam->load() > 0.5f;
+            cs.sendsGenerated = es.hasGenerated();
+            cs.sendsSource = es.hasSource();
+            cs.sourceChannel = es.sourceChannel;
+            cs.genChannel = es.genChannel;
+            cs.zone = es.zone;
+            captureWriter.process (transport, numSamples, engineIn.begin(), engineIn.size(), engineOut.begin(), engineOut.size(), cs);
+        }
+
         for (const auto& e : engineOut)
             merged.addEvent (e.data, e.size, e.sample);
         midi.clear();
@@ -316,6 +336,71 @@ namespace tonnetz
         status.generated = engine.generatedChord();
         status.releases = engine.releases();
         statusForMessage.publish (status);
+    }
+
+    //==========================================================================
+    // Capture and export (PLAN.md §3.5). Message thread.
+
+    bool TonnetzProcessor::pollCapture()
+    {
+        return capture.drain (captureQueue);
+    }
+
+    MidiSong TonnetzProcessor::captureSong (CaptureRendering rendering) const
+    {
+        const auto& clock = capture.clock();
+        CaptureFileInfo info;
+        info.bpm = clock.bpm;
+        info.numerator = clock.numerator;
+        info.denominator = clock.denominator;
+        const auto s = getEngineStatus();
+        info.keyTonic = s.keyTonic;
+        info.keyMinor = s.keyMinor;
+        info.name = captureName (rendering).toStdString();
+        info.sourceName = "TonnetzML source";
+        return renderCapture (capture.current(), info, rendering);
+    }
+
+    juce::String TonnetzProcessor::captureName (CaptureRendering rendering) const
+    {
+        const auto s = getEngineStatus();
+        const int bars = capture.bars();
+        juce::String name = "TonnetzML";
+        if (s.keyTonic >= 0)
+            name << " " << guessKeyName (s.keyTonic, s.keyMinor) << (s.keyMinor ? " minor" : " major");
+        if (rendering == CaptureRendering::Chords)
+            name << " chords";
+        name << " " << bars << (bars == 1 ? " bar" : " bars");
+        return name;
+    }
+
+    bool TonnetzProcessor::writeCapture (const juce::File& file, CaptureRendering rendering, juce::String& error) const
+    {
+        const auto song = captureSong (rendering);
+        if (song.noteCount() == 0)
+        {
+            error = "Nothing captured yet: play something first.";
+            return false;
+        }
+        const auto bytes = writeMidiFile (song);
+        file.getParentDirectory().createDirectory();
+        if (! file.replaceWithData (bytes.data(), bytes.size()))
+        {
+            error = "Couldn't write " + file.getFullPathName();
+            return false;
+        }
+        return true;
+    }
+
+    juce::File TonnetzProcessor::exportFolder()
+    {
+        return juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("TonnetzML Export");
+    }
+
+    juce::File TonnetzProcessor::writeCaptureForDrag (CaptureRendering rendering, juce::String& error) const
+    {
+        const auto file = exportFolder().getChildFile (juce::File::createLegalFileName (captureName (rendering)) + ".mid");
+        return writeCapture (file, rendering, error) ? file : juce::File();
     }
 
     //==========================================================================
@@ -504,6 +589,12 @@ namespace tonnetz
                << "keyState: " << states[(int) guess.state] << "\n"
                << "keyNotes: " << guess.notes << "\n"
                << "keyInForce: " << keyName (engineStatus.keyTonic, engineStatus.keyMinor) << "\n";
+        // Phase 5: the capture (what the strip shows: the take, else the last 64 bars).
+        status << "capture: " << (capture.isArmed() ? "armed" : "off") << "\n"
+               << "captureShows: " << (capture.showingTake() ? "take" : "last 64 bars") << "\n"
+               << "captureNotes: " << (int) capture.current().size() << "\n"
+               << "captureBars: " << capture.bars() << "\n"
+               << "captureLost: " << (int) capture.lossCount() << "\n";
         const auto now = juce::Time::getMillisecondCounter();
         if (status != statusWritten && (statusWritten.isEmpty() || now - statusWrittenAt >= 250))
         {

@@ -334,6 +334,14 @@ namespace tonnetz::ui
         repaint();
     }
 
+    void LatticeView::holdSet (const std::vector<int>& pitches)
+    {
+        held.reset();
+        builtSet = true;
+        setHeldPitches (pitches);           // only the voices that differ move
+        repaint();
+    }
+
     void LatticeView::releaseLattice()
     {
         notes.releaseHolder (EditorNotes::lattice);

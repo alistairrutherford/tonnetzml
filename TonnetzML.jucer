@@ -42,6 +42,11 @@
         <FILE id="tzF044" name="KeyBand.h" compile="0" resource="0" file="Source/core/theory/KeyBand.h"/>
         <FILE id="tzF045" name="RomanNumeral.h" compile="0" resource="0" file="Source/core/theory/RomanNumeral.h"/>
       </GROUP>
+      <GROUP id="tzGrp6" name="core/midiio">
+        <FILE id="tzF080" name="CaptureQueue.h" compile="0" resource="0" file="Source/core/midiio/CaptureQueue.h"/>
+        <FILE id="tzF081" name="CaptureModel.h" compile="0" resource="0" file="Source/core/midiio/CaptureModel.h"/>
+        <FILE id="tzF082" name="MidiFile.h" compile="0" resource="0" file="Source/core/midiio/MidiFile.h"/>
+      </GROUP>
       <GROUP id="tzGrp2" name="plugin">
         <FILE id="tzF011" name="TonnetzProcessor.h" compile="0" resource="0" file="Source/plugin/TonnetzProcessor.h"/>
         <FILE id="tzF012" name="TonnetzProcessor.cpp" compile="1" resource="0" file="Source/plugin/TonnetzProcessor.cpp"/>
@@ -62,6 +67,8 @@
         <FILE id="tzF073" name="KeyboardStrip.cpp" compile="1" resource="0" file="Source/ui/KeyboardStrip.cpp"/>
         <FILE id="tzF074" name="WordBar.h" compile="0" resource="0" file="Source/ui/WordBar.h"/>
         <FILE id="tzF075" name="WordBar.cpp" compile="1" resource="0" file="Source/ui/WordBar.cpp"/>
+        <FILE id="tzF076" name="CaptureStrip.h" compile="0" resource="0" file="Source/ui/CaptureStrip.h"/>
+        <FILE id="tzF077" name="CaptureStrip.cpp" compile="1" resource="0" file="Source/ui/CaptureStrip.cpp"/>
       </GROUP>
     </GROUP>
   </MAINGROUP>

@@ -1,13 +1,14 @@
 // TonnetzML's editor (PLAN.md §5, Phase 4): the lattice is the whole window. A header line
 // (name, Enable, the mode, the key, the sentence `Cmaj7 (I) ──P·L──► A♭maj7 (♭VI)`, the theme),
 // the lattice (LatticeView) with the settings column floating over its top-right corner and the
-// word bar over its foot, and the keyboard strip along the bottom. No panels, combo-box rows or
+// word bar over its foot, the capture strip (Phase 5) and the keyboard strip along the bottom. No panels, combo-box rows or
 // sliders; nothing comes from the sibling plug-ins' UI.
 //
 // The editor reads the engine's snapshot (TonnetzProcessor::getEngineStatus) on a 60 Hz timer
 // and writes commands (EditorCommands.h), never engine state.
 #pragma once
 
+#include "CaptureStrip.h"
 #include "Hud.h"
 #include "KeyboardStrip.h"
 #include "LatticeModel.h"
@@ -41,6 +42,7 @@ namespace tonnetz
 
         ui::LatticeView& latticeView() noexcept { return lattice; }
         ui::KeyboardStrip& keyboardStrip() noexcept { return keyboard; }
+        ui::CaptureStrip& captureStrip() noexcept { return strip; }
         ui::WordBar& wordBar() noexcept { return word; }
         ui::Header& header() noexcept { return head; }
         ui::Settings& settings() noexcept { return side; }
@@ -61,6 +63,7 @@ namespace tonnetz
         ui::EditorNotes notes;
         ui::LatticeView lattice;
         ui::KeyboardStrip keyboard;
+        ui::CaptureStrip strip;
         ui::WordBar word;
         ui::Header head;
         ui::Settings side;

@@ -49,6 +49,8 @@ namespace tonnetz::ui
         void glideTo (const Triangle&);
         void toggleNode (Vec node);
         void releaseLattice();
+        // Holds these exact pitches as the lattice's set (the capture strip's recall, Phase 5).
+        void holdSet (const std::vector<int>& pitches);
         int ghostAt (juce::Point<float>) const;          // index into the model's ghosts, or -1
         bool clickGhost (int index);                     // false if it can't be clicked here
         juce::Point<float> ghostChipCentre (int index) const;

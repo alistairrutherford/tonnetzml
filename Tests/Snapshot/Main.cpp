@@ -15,7 +15,8 @@
 //   4. mirror   (Phase 2) the rig and host chords come out as W(chord) on the generated channel,
 //               after the gather window, for each factory slot; Mix and channels; Status.txt
 //               names the slot, word and chords
-//   5. params   the 21 parameters in order (Phase 3's appended after Octave), with their defaults
+//   5. params   the 23 parameters in order (Phase 3's appended after Octave, Phase 5's after In
+//               key), with their defaults
 //   8. walk     (Phase 3) operator keys from the host and the rig walk a held chord and never
 //               sound; Orbit steps on the beat from the rig; a D major tune from the rig gives a
 //               confident D major in Status.txt with generated chords sounding; Hold copies the
@@ -43,6 +44,13 @@
 //               In key marks exactly opsInKey's ghosts
 //  14. realtime no allocation in processBlock while the editor sends notes, ghost clicks and
 //               words; the command queue's limit; a press and release in one block keep order
+//  15. capture  (Phase 5) the capture strip in reference images (both themes); one glyph per
+//               chord in its ink, named; a click on a glyph recalls that chord as the source, a
+//               second click lets it go; drag-out as a call: the file it writes is what the
+//               host received on the generated channel (to the tick), Alt gives the Chords
+//               rendering on the grid; Save's writer; the take and the last 64 bars; the key
+//               signature; Capture and Capture source saved with the state; no allocation in
+//               processBlock while capturing
 //
 //   TonnetzMLSnapshot <fixtures dir> <output dir> [--update | --no-pixels]
 //
@@ -441,8 +449,9 @@ namespace
             if (auto* withId = dynamic_cast<juce::AudioProcessorParameterWithID*> (param))
                 ids.add (withId->getParameterID());
         check (ids.joinIntoString (" ") == "enable testRig slot gatherMs mix sourceChannel genChannel register bass octave "
-                                           "mode latch walkInput orbitCycle orbitRate opZoneStart opZoneOn key keyTonic keyMinor inKey",
-               juce::String (ids.size()) + " parameters (at most 28), Phase 2's and Phase 3's appended in turn: " + ids.joinIntoString (" "));
+                                           "mode latch walkInput orbitCycle orbitRate opZoneStart opZoneOn key keyTonic keyMinor inKey capture captureSource",
+               juce::String (ids.size()) + " parameters (at most 28), Phase 2's, 3's and 5's appended in turn: " + ids.joinIntoString (" "));
+        check (plain (p, params::capture) == 0.0f && plain (p, params::captureSource) == 0.0f, "Phase 5 defaults: Capture off, Capture source off");
         check (plain (p, params::mode) == 0.0f && plain (p, params::latch) == 0.0f && plain (p, params::walkInput) == 0.0f
                    && plain (p, params::orbitCycle) == 0.0f && plain (p, params::orbitRate) == 2.0f && plain (p, params::opZoneStart) == 24.0f
                    && plain (p, params::opZoneOn) == 1.0f && plain (p, params::key) == 1.0f && plain (p, params::keyTonic) == 0.0f
@@ -857,6 +866,8 @@ namespace
         setPlain (a, params::registerMode, 1.0f);
         setPlain (a, params::bass, 1.0f);
         setPlain (a, params::octave, -2.0f);
+        set (a, params::capture, true);
+        set (a, params::captureSource, true);
         check (a.setSlotWordText (0, "Grow(0,4) P +M3 Shrink") && a.setSlotWordText (7, "T(2,-1) Flip(0,7) Pivot(4) H"), "slot words set from text");
         juce::MemoryBlock saved;
         a.getStateInformation (saved);
@@ -865,8 +876,9 @@ namespace
         b.setStateInformation (saved.getData(), (int) saved.getSize());
         check (b.getState().getParameter (params::enable)->getValue() == 0.0f && plain (b, params::slot) == 6.0f && plain (b, params::gatherMs) == 37.0f
                    && plain (b, params::mix) == 2.0f && plain (b, params::sourceChannel) == 7.0f && plain (b, params::genChannel) == 16.0f
-                   && plain (b, params::registerMode) == 1.0f && plain (b, params::bass) == 1.0f && plain (b, params::octave) == -2.0f,
-               "a saved state restores every parameter into a new instance");
+                   && plain (b, params::registerMode) == 1.0f && plain (b, params::bass) == 1.0f && plain (b, params::octave) == -2.0f
+                   && plain (b, params::capture) == 1.0f && plain (b, params::captureSource) == 1.0f,
+               "a saved state restores every parameter into a new instance (Capture and Capture source too)");
         bool wordsBack = true;
         for (int i = 0; i < numSlots; ++i)
             wordsBack = wordsBack && b.getSlotWord (i) == a.getSlotWord (i);
@@ -1295,7 +1307,7 @@ namespace
                 ranged->setValueNotifyingHost (before);
                 c->refresh();
             }
-            check (found == total && total == 21, juce::String (size.first) + " x " + juce::String (size.second) + ": every parameter has a control ("
+            check (found == total && total == 23, juce::String (size.first) + " x " + juce::String (size.second) + ": every parameter has a control ("
                    + juce::String (found) + "/" + juce::String (total) + ") " + missing.joinIntoString (" "));
             check (inside == total && works == total, "each is visible, inside the window at its full width, and a click changes it " + broken.joinIntoString (" "));
 
@@ -1524,6 +1536,226 @@ namespace
         check (r.notes.size() == 2 && r.notes[0].velocity > 0 && r.notes[1].velocity == 0 && r.notes[1].sample == r.notes[0].sample + 1,
                "an editor note pressed and let go within one block sounds, then ends, a sample later");
     }
+
+    //==========================================================================
+    // Capture and export (Phase 5, PLAN.md §3.5, §5).
+
+    // A .mid file's notes (all tracks).
+    MidiSong readMid (const juce::File& f)
+    {
+        juce::MemoryBlock data;
+        MidiSong song;
+        std::string error;
+        if (f.loadFileAsData (data))
+            readMidiFile ((const uint8_t*) data.getData(), data.getSize(), song, error);
+        return song;
+    }
+
+    void testCapture (const juce::File& fixtures, const juce::File& output)
+    {
+        std::cout << "capture" << std::endl;
+        MiniHost h;
+        setPlain (*h.p, params::gatherMs, 0.0f);
+        setPlain (*h.p, params::slot, 4.0f);          // E: P L
+        setPlain (*h.p, params::key, 2.0f);           // Hold C major: the file carries its key
+        setPlain (*h.p, params::keyTonic, 0.0f);
+        set (*h.p, params::capture, true);
+        std::unique_ptr<juce::AudioProcessorEditor> e (h.p->createEditor());
+        auto& ed = editorOf (e);
+        ed.freezeAnimation (true);
+        auto& strip = ed.captureStrip();
+
+        // I-V-vi-IV from beat 4, a bar each, 3.5 beats long.
+        const int chords[4][3] = { { 60, 64, 67 }, { 55, 59, 62 }, { 57, 60, 64 }, { 53, 57, 60 } };
+        // The block holding `beat`, with `events` at their sample in it.
+        const auto playAt = [&h] (double beat, const std::vector<juce::MidiMessage>& events)
+        {
+            const auto target = MiniHost::at (beat);
+            while (h.pos + MiniHost::block <= target)
+                h.process();
+            juce::MidiBuffer b;
+            for (const auto& m : events)
+                b.addEvent (m, (int) (target - h.pos));
+            h.process (b);
+        };
+        for (int i = 0; i < 4; ++i)
+        {
+            std::vector<juce::MidiMessage> on, off;
+            for (int n : chords[i])
+            {
+                on.push_back (juce::MidiMessage::noteOn (1, n, (juce::uint8) 100));
+                off.push_back (juce::MidiMessage::noteOff (1, n));
+            }
+            playAt (4.0 + 4 * i, on);
+            playAt (7.5 + 4 * i, off);
+        }
+        h.runTo (MiniHost::at (21.0));
+        ed.refreshNow();
+        check (strip.glyphCount() == 4, "four chords captured, four glyphs (" + juce::String (strip.glyphCount()) + ")");
+        juce::StringArray names;
+        bool inks = true;
+        for (int i = 0; i < strip.glyphCount(); ++i)
+        {
+            names.add (strip.glyphName (i));
+            inks = inks && strip.glyph (i).stream == CaptureStream::Generated && ! strip.glyphBounds (i).isEmpty();
+        }
+        check (names.joinIntoString (" ") == juce::String::fromUTF8 ("A\xe2\x99\xad E\xe2\x99\xad D\xe2\x99\xadm D\xe2\x99\xad"),
+               "the glyphs are the generated chords, oldest first: " + names.joinIntoString (" "));
+        check (inks, "each glyph is a generated chord (vermilion ink), in sight");
+
+        // Reference images: the strip under the lattice, both themes.
+        for (int theme = 0; theme < 2; ++theme)
+        {
+            ed.setDark (theme == 1);
+            compareImage (editorImage (ed, 1200, 800), juce::String ("capture_strip_") + (theme ? "dark" : "paper") + "_1200x800", fixtures, output);
+        }
+        ed.setDark (false);
+        const auto stripArea = ed.getLocalArea (&strip, strip.getLocalBounds());
+        const auto keysArea = ed.getLocalArea (&ed.keyboardStrip(), ed.keyboardStrip().getLocalBounds());
+        const auto latticeArea = ed.getLocalArea (&ed.latticeView(), ed.latticeView().getLocalBounds());
+        check (stripArea.getY() == latticeArea.getBottom() && stripArea.getBottom() == keysArea.getY() && stripArea.getWidth() == ed.getWidth(),
+               "the strip sits between the lattice and the keyboard, full width");
+
+        // Drag-out, as a call: the file is what the host received on the generated channel.
+        const auto file = strip.dragOut (false, false);
+        const auto song = readMid (file);
+        std::vector<MidiNote> sent;
+        {
+            std::map<int, size_t> open;
+            const double spb = MiniHost::rate * 60.0 / 120.0;
+            for (const auto& n : h.notes)
+            {
+                if (n.channel != 2)
+                    continue;
+                const auto tick = (int64_t) std::llround ((double) n.sample / spb * 960.0) - 4 * 960;   // the file starts at bar 2
+                if (n.velocity > 0)
+                {
+                    open[n.note] = sent.size();
+                    sent.push_back ({ tick, tick, (uint8_t) n.note, (uint8_t) n.velocity, 1 });
+                }
+                else if (open.count (n.note) != 0)
+                {
+                    sent[open[n.note]].end = tick;
+                    open.erase (n.note);
+                }
+            }
+            smf::sortNotes (sent);
+        }
+        bool same = song.tracks.size() == 1 && song.tracks[0].notes.size() == sent.size() && sent.size() == 12;
+        for (size_t i = 0; same && i < sent.size(); ++i)
+        {
+            const auto& a = song.tracks[0].notes[i];
+            same = a.start == sent[i].start && a.end == sent[i].end && a.pitch == sent[i].pitch && a.velocity == sent[i].velocity && a.channel == sent[i].channel;
+        }
+        check (file.existsAsFile() && file.getFileName() == "TonnetzML C major 4 bars.mid" && file.isAChildOf (TonnetzProcessor::exportFolder()),
+               "drag-out writes " + file.getFileName() + " in the export folder");
+        check (same, "the dragged file is what the host received on channel 2, every note to the tick (" + juce::String ((int) sent.size()) + " notes)");
+        check (song.ppq == 960 && std::abs (song.bpm - 120.0) < 0.01 && song.numerator == 4 && song.key.present && song.key.sharps == 0 && ! song.key.minor
+                   && song.tracks.size() == 1 && song.tracks[0].name == "TonnetzML C major 4 bars",
+               "960 ppq, 120 BPM, 4/4, C major's key signature, the track named after the file");
+
+        const auto chordFile = strip.dragOut (true, false);
+        const auto blocks = readMid (chordFile);
+        bool grid = blocks.tracks.size() == 1 && blocks.tracks[0].notes.size() == 12;
+        for (const auto& n : blocks.notes)
+            grid = grid && n.start % 240 == 0 && n.end % 240 == 0;
+        check (chordFile.getFileName() == "TonnetzML C major chords 4 bars.mid" && grid, "Alt-drag: the Chords rendering, every note on the sixteenth grid (" + chordFile.getFileName() + ")");
+
+        juce::TemporaryFile saved (".mid");
+        juce::String error;
+        check (h.p->writeCapture (saved.getFile(), CaptureRendering::AsPlayed, error) && readMid (saved.getFile()).noteCount() == 12,
+               "Save's writer writes the same file anywhere");
+
+        // Recall: a click on the second glyph (E♭ major from G) makes its pitches the source.
+        const auto recall = strip.glyph (1).pitches();
+        strip.mouseUp (mouseAt (strip, strip.glyphBounds (1).getCentre()));
+        h.process();
+        h.process();
+        ed.refreshNow();
+        std::set<int> sourceNow;
+        const auto st = h.p->getEngineStatus();
+        for (int n = 0; n < 128; ++n)
+            if (st.sourceVelocity[(size_t) n] != 0)
+                sourceNow.insert (n);
+        check (sourceNow == std::set<int> (recall.begin(), recall.end()) && strip.recalledGlyph() == 1,
+               "a click on a glyph recalls its chord, as voiced, as the source (" + juce::String ((int) sourceNow.size()) + " notes)");
+        check (st.generated.mask != 0 && ed.model().generated.present, "and W(chord) sounds from it");
+        strip.clickGlyph (1);
+        h.process();
+        h.process();
+        ed.refreshNow();
+        int held = 0;
+        for (auto v : h.p->getEngineStatus().sourceVelocity)
+            held += v != 0 ? 1 : 0;
+        check (held == 0 && strip.recalledGlyph() == -1, "a second click lets it go");
+
+        // The take: disarming keeps it (now with the recalled chord's output too).
+        const int inTake = strip.glyphCount();
+        set (*h.p, params::capture, false);
+        h.process();
+        h.process (chordOn ({ 40, 44, 47 }));
+        ed.refreshNow();
+        check (! h.p->captureModel().isArmed() && h.p->captureModel().showingTake() && inTake == 5 && strip.glyphCount() == inTake,
+               "disarmed: the take is kept and shown, what is played after it isn't in it (" + juce::String (inTake) + " glyphs)");
+        {
+            juce::MidiBuffer off;
+            for (int n : { 40, 44, 47 })
+                off.addEvent (juce::MidiMessage::noteOff (1, n), 0);
+            h.process (off);
+        }
+        set (*h.p, params::capture, true);
+        h.process();
+        ed.refreshNow();
+        check (strip.glyphCount() == 0 && strip.dragOut (false, false) == juce::File(), "arming again starts an empty take: nothing to drag");
+        set (*h.p, params::capture, false);
+
+        // Source notes: with Capture source on they are glyphs of their own (teal) and a track.
+        MiniHost s;
+        setPlain (*s.p, params::gatherMs, 0.0f);
+        set (*s.p, params::captureSource, true);
+        std::unique_ptr<juce::AudioProcessorEditor> e2 (s.p->createEditor());
+        auto& ed2 = editorOf (e2);
+        ed2.freezeAnimation (true);
+        s.process (chordOn ({ 60, 64, 67 }));
+        s.runTo (MiniHost::at (2.0));
+        ed2.refreshNow();
+        int teal = 0;
+        for (int i = 0; i < ed2.captureStrip().glyphCount(); ++i)
+            teal += ed2.captureStrip().glyph (i).stream == CaptureStream::Source ? 1 : 0;
+        const auto both = readMid (ed2.captureStrip().dragOut (false, false));
+        check (ed2.captureStrip().glyphCount() == 2 && teal == 1 && both.tracks.size() == 2 && both.tracks[1].name == "TonnetzML source"
+                   && both.tracks[1].notes.size() == 3 && both.tracks[1].notes[0].channel == 0,
+               "Capture source: the source chord is a teal glyph and its own track on channel 1 (no take: the last 64 bars)");
+        compareImage (editorImage (ed2, 760, 520), "capture_strip_source_paper_760x520", fixtures, output);
+
+        // No allocation in processBlock while capturing (armed, source on, chords changing).
+        MiniHost r;
+        setPlain (*r.p, params::gatherMs, 0.0f);
+        set (*r.p, params::capture, true);
+        set (*r.p, params::captureSource, true);
+        setPlain (*r.p, params::mix, 1.0f);
+        r.process();
+        int allocations = 0;
+        for (int round = 0; round < 60; ++round)
+        {
+            const auto on = chordOn ({ 48 + round % 12, 52 + round % 12, 55 + round % 12 });
+            juce::MidiBuffer off;
+            for (int n : { 48 + round % 12, 52 + round % 12, 55 + round % 12 })
+                off.addEvent (juce::MidiMessage::noteOff (1, n), 100);
+            {
+                AllocWatch watch;
+                allocCount = 0;
+                r.process (on);
+                r.process (off);
+                allocations += allocCount.load();
+            }
+            if (round == 30)
+                set (*r.p, params::capture, false);
+            if (round % 10 == 0)
+                r.p->pollCapture();
+        }
+        check (allocations == 0, "no allocation in processBlock while capturing (" + juce::String (allocations) + ")");
+    }
 }
 
 int main (int argc, char* argv[])
@@ -1550,6 +1782,7 @@ int main (int argc, char* argv[])
     testWordBar();
     testKeyOnLattice();
     testEditorRealtime();
+    testCapture (fixtures, output);
     testThrough();
     testRig (output);
     testParams();

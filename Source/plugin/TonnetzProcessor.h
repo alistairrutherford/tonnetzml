@@ -18,6 +18,8 @@
 #include "../core/engine/SnapshotExchange.h"
 #include "../core/engine/TestRig.h"
 #include "../core/engine/Transport.h"
+#include "../core/midiio/CaptureModel.h"
+#include "../core/midiio/CaptureQueue.h"
 #include <atomic>
 
 namespace tonnetz
@@ -47,6 +49,9 @@ namespace tonnetz
         inline constexpr const char* keyTonic = "keyTonic";
         inline constexpr const char* keyMinor = "keyMinor";
         inline constexpr const char* inKey = "inKey";
+        // Phase 5 (appended).
+        inline constexpr const char* capture = "capture";
+        inline constexpr const char* captureSource = "captureSource";
 
         juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
     }
@@ -175,9 +180,30 @@ namespace tonnetz
         // keyMinor (PLAN.md §3.6). Public for the same reason.
         void followKeyMode();
 
+        //======================================================================
+        // Capture and export (PLAN.md §3.5, Phase 5). Message thread.
+
+        // Takes what the audio thread captured into the model (the timer does it 20 times a
+        // second; public so tests needn't run a message loop). True if anything changed.
+        bool pollCapture();
+        CaptureModel& captureModel() noexcept { return capture; }
+        const CaptureModel& captureModel() const noexcept { return capture; }
+
+        // The capture shown in the strip (the take, else the last 64 bars) as a MIDI file in the
+        // given rendering, with the tempo, meter and key in force. Empty if nothing is captured.
+        MidiSong captureSong (CaptureRendering) const;
+        // "TonnetzML C major 8 bars" (the file's and the dropped clip's name).
+        juce::String captureName (CaptureRendering) const;
+        // Writes it to `file`: false (with `error`) if there is nothing to write or it can't.
+        bool writeCapture (const juce::File& file, CaptureRendering, juce::String& error) const;
+        // Writes it to a temporary file for the drag-out (the folder `exportFolder`); returns it,
+        // or an empty File (with `error`).
+        juce::File writeCaptureForDrag (CaptureRendering, juce::String& error) const;
+        static juce::File exportFolder();
+
     private:
         static BusesProperties makeBuses();
-        void timerCallback() override { followKeyMode(); pollTestRig(); }
+        void timerCallback() override { followKeyMode(); pollCapture(); pollTestRig(); }
         void run (juce::AudioBuffer<float>&, juce::MidiBuffer&, bool bypassed);
         Transport readTransport();
 
@@ -210,11 +236,18 @@ namespace tonnetz
         std::atomic<float>* keyTonicParam = nullptr;
         std::atomic<float>* keyMinorParam = nullptr;
         std::atomic<float>* inKeyParam = nullptr;
+        std::atomic<float>* captureParam = nullptr;
+        std::atomic<float>* captureSourceParam = nullptr;
         uint32_t restoredSeq = 0;           // audio thread: the last WalkRestore taken
         EngineStatus status;                // audio thread: filled every block
         Transport lastTransport;
         std::atomic<bool> resetRequested { false };
         std::atomic<double> preparedSampleRate { 44100.0 };
+
+        // Audio thread → message thread: the capture (PLAN.md §3.5).
+        CaptureQueue captureQueue;
+        CaptureWriter captureWriter { captureQueue };
+        CaptureModel capture;               // message thread
 
         // Message thread → audio thread.
         EditorCommandFifo editorCommands;

@@ -8,6 +8,7 @@ namespace tonnetz
           notes (p),
           lattice (p, picture, notes),
           keyboard (p, picture, notes),
+          strip (p, picture, lattice, notes),
           word (p, picture),
           head (p, picture, [this] { setDark (! processor.editorView().dark); }),
           side (p, [this] { if (constructed) layoutFloating(); })
@@ -16,6 +17,7 @@ namespace tonnetz
         setWantsKeyboardFocus (true);
         addAndMakeVisible (lattice);
         addAndMakeVisible (keyboard);
+        addAndMakeVisible (strip);
         addAndMakeVisible (word);
         addAndMakeVisible (head);
         addAndMakeVisible (side);
@@ -54,6 +56,7 @@ namespace tonnetz
         side.refresh();
         word.refresh();
         keyboard.refresh();
+        strip.repaint();
         repaint();
         lattice.repaint();
     }
@@ -73,6 +76,7 @@ namespace tonnetz
         head.controls (out);
         side.controls (out);
         out.add (&word.slotChoices());
+        strip.controls (out);
         return out;
     }
 
@@ -119,6 +123,9 @@ namespace tonnetz
             word.refresh();
             head.refresh();
         }
+        // The capture (Phase 5): taken from the audio thread here too, so the strip keeps up.
+        processor.pollCapture();
+        strip.refresh();
         // Parameters can change from the host at any time: the labels re-read them (cheap).
         if (changed || ++ticks % 6 == 0)
         {
@@ -151,6 +158,7 @@ namespace tonnetz
         head.setBounds (r.removeFromTop (headerHeight));
         const int keysHeight = ui::KeyboardStrip::barHeight + juce::jlimit (56, 96, getHeight() / 9);
         keyboard.setBounds (r.removeFromBottom (keysHeight));
+        strip.setBounds (r.removeFromBottom (ui::CaptureStrip::stripHeight));
         lattice.setBounds (r);
         layoutFloating();
     }

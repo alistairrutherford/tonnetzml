@@ -15,6 +15,7 @@
 		21306F34BF442E347A70F39A /* include_juce_gui_extra.mm */ = {isa = PBXBuildFile; fileRef = 81D090E8C67383301D305070; };
 		27881AD11304F606D4F82A48 /* Hud.cpp */ = {isa = PBXBuildFile; fileRef = 4B2E7C44303535282687B705; };
 		27A83D8AD22FB041FA4A1A0C /* include_juce_audio_utils.mm */ = {isa = PBXBuildFile; fileRef = ECB9CAD90026D9768D28D0F4; };
+		29621329E679F2B2F6BF9F99 /* CaptureStrip.cpp */ = {isa = PBXBuildFile; fileRef = 2C67C70FA7871A1D970D648D; };
 		29C7883FD185666411302A36 /* QuartzCore.framework */ = {isa = PBXBuildFile; fileRef = 0B95BC4CC4E705C18123A2AC; };
 		30B4D29DE1C343F0456474D5 /* include_juce_core.mm */ = {isa = PBXBuildFile; fileRef = CDEEC5ED3AA8516BF3691613; };
 		353622A65F00F9B58E548F43 /* include_juce_gui_basics_4.cpp */ = {isa = PBXBuildFile; fileRef = 8E43A930ED54E4E7AFF30626; };
@@ -64,6 +65,7 @@
 		1A5A0FAB94BCF8D93D49901F /* juce_audio_formats */ /* juce_audio_formats */ = {isa = PBXFileReference; lastKnownFileType = folder; name = juce_audio_formats; path = /Users/alistairrutherford/Development/JUCE/modules/juce_audio_formats; sourceTree = "<absolute>"; };
 		23ACFD8A74288A300C3FEF67 /* Security.framework */ /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
 		24C1E450FF9A763A4FE559BD /* JuceHeader.h */ /* JuceHeader.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = JuceHeader.h; path = ../../JuceLibraryCode/JuceHeader.h; sourceTree = SOURCE_ROOT; };
+		2C67C70FA7871A1D970D648D /* CaptureStrip.cpp */ /* CaptureStrip.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = CaptureStrip.cpp; path = ../../../../Source/ui/CaptureStrip.cpp; sourceTree = SOURCE_ROOT; };
 		31001111A6DCA8387F36043E /* Main.cpp */ /* Main.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = Main.cpp; path = ../../Main.cpp; sourceTree = SOURCE_ROOT; };
 		36CFD8081D5360063F11B273 /* Accelerate.framework */ /* Accelerate.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Accelerate.framework; path = System/Library/Frameworks/Accelerate.framework; sourceTree = SDKROOT; };
 		3C3908E1AE5041C620784113 /* juce_gui_extra */ /* juce_gui_extra */ = {isa = PBXFileReference; lastKnownFileType = folder; name = juce_gui_extra; path = /Users/alistairrutherford/Development/JUCE/modules/juce_gui_extra; sourceTree = "<absolute>"; };
@@ -151,6 +153,7 @@
 				5604BC7A0936A6B8A857B72C,
 				F7D4CE0130260F6283110273,
 				77692AE46E462DEAD90C3251,
+				2C67C70FA7871A1D970D648D,
 			);
 			name = Source;
 			sourceTree = "<group>";
@@ -334,6 +337,7 @@
 				D1BE61716C204AC89BB4C5AD,
 				CCC0A5863CF850255E4343C0,
 				E217707494FBA35E6059FE3C,
+				29621329E679F2B2F6BF9F99,
 				9901D05B332C42372D69EFEB,
 				1F64A44FCBFDAB0156B3AA9C,
 				C9A4E808D0E7A930A3FF91B5,

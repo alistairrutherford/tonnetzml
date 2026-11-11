@@ -48,6 +48,7 @@ compile_and_run test_orbit
 compile_and_run test_keys
 compile_and_run test_edge
 compile_and_run test_editor
+compile_and_run test_capture
 
 # The offline render for the Live checks (PLAN.md §7.4): built, and run once on a known scenario.
 echo "== building render_scenario =="

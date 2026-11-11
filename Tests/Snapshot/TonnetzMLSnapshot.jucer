@@ -15,6 +15,7 @@
         <FILE id="snF005" name="LatticeView.cpp" compile="1" resource="0" file="../../Source/ui/LatticeView.cpp"/>
         <FILE id="snF006" name="KeyboardStrip.cpp" compile="1" resource="0" file="../../Source/ui/KeyboardStrip.cpp"/>
         <FILE id="snF007" name="WordBar.cpp" compile="1" resource="0" file="../../Source/ui/WordBar.cpp"/>
+        <FILE id="snF008" name="CaptureStrip.cpp" compile="1" resource="0" file="../../Source/ui/CaptureStrip.cpp"/>
     </GROUP>
   </MAINGROUP>
   <MODULES>
