@@ -16,6 +16,13 @@
         <FILE id="tzF002" name="Transport.h" compile="0" resource="0" file="Source/core/engine/Transport.h"/>
         <FILE id="tzF003" name="SnapshotExchange.h" compile="0" resource="0" file="Source/core/engine/SnapshotExchange.h"/>
         <FILE id="tzF004" name="TestRig.h" compile="0" resource="0" file="Source/core/engine/TestRig.h"/>
+        <FILE id="tzF051" name="VoiceTracker.h" compile="0" resource="0" file="Source/core/engine/VoiceTracker.h"/>
+        <FILE id="tzF052" name="EventQueue.h" compile="0" resource="0" file="Source/core/engine/EventQueue.h"/>
+        <FILE id="tzF053" name="Clock.h" compile="0" resource="0" file="Source/core/engine/Clock.h"/>
+        <FILE id="tzF054" name="ZoneRouter.h" compile="0" resource="0" file="Source/core/engine/ZoneRouter.h"/>
+        <FILE id="tzF055" name="ChordGatherer.h" compile="0" resource="0" file="Source/core/engine/ChordGatherer.h"/>
+        <FILE id="tzF056" name="Voicer.h" compile="0" resource="0" file="Source/core/engine/Voicer.h"/>
+        <FILE id="tzF057" name="LatticeEngine.h" compile="0" resource="0" file="Source/core/engine/LatticeEngine.h"/>
       </GROUP>
       <GROUP id="tzGrp4" name="core/lattice">
         <FILE id="tzF031" name="Lattice.h" compile="0" resource="0" file="Source/core/lattice/Lattice.h"/>

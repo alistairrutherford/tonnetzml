@@ -1,8 +1,13 @@
-// TonnetzML's processor. Phase 0 (PLAN.md §6): MIDI in goes to MIDI out unchanged, the audio
-// output is silent, and the test rig (§7.3) can play keys from a file as host MIDI.
+// TonnetzML's processor. Phase 2 (PLAN.md §6): Mirror. The host's notes (and the test rig's keys,
+// §7.3, as if they came from the host) go through the LatticeEngine: every chord comes out as
+// W(chord), W the current slot's word. Other MIDI goes through. The audio output is silent.
+//
+// The eight slot words are plug-in state, not parameters (§3.7): kept on the message thread,
+// saved with the set, handed to the audio thread through a SnapshotExchange.
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include "../core/engine/LatticeEngine.h"
 #include "../core/engine/MidiEvents.h"
 #include "../core/engine/SnapshotExchange.h"
 #include "../core/engine/TestRig.h"
@@ -15,9 +20,27 @@ namespace tonnetz
     {
         inline constexpr const char* enable = "enable";
         inline constexpr const char* testRig = "testRig";
+        // Phase 2 (appended: hosts keep automation by ID, but the order is the host's list).
+        inline constexpr const char* slot = "slot";
+        inline constexpr const char* gatherMs = "gatherMs";
+        inline constexpr const char* mix = "mix";
+        inline constexpr const char* sourceChannel = "sourceChannel";
+        inline constexpr const char* genChannel = "genChannel";
+        inline constexpr const char* registerMode = "register";
+        inline constexpr const char* bass = "bass";
+        inline constexpr const char* octave = "octave";
 
         juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
     }
+
+    // The eight slot words (A–H).
+    struct SlotWords
+    {
+        std::array<Word, numSlots> words {};
+    };
+
+    // The factory words (LatticeEngine.h).
+    SlotWords factorySlotWords();
 
     class TonnetzProcessor final : public juce::AudioProcessor,
                                    private juce::Timer
@@ -54,6 +77,16 @@ namespace tonnetz
         juce::AudioProcessorValueTreeState& getState() noexcept { return state; }
 
         //======================================================================
+        // Slot words (PLAN.md §3.1, Mirror). Message thread.
+
+        int currentSlot() const noexcept;
+        Word getSlotWord (int slot) const;
+        void setSlotWord (int slot, const Word& word);
+        // Parses `text` into slot `slot`; false (and nothing changes) if it isn't a word.
+        bool setSlotWordText (int slot, const juce::String& text);
+        static juce::String slotName (int slot) { return juce::String::charToString ((juce::juce_wchar) ('A' + slot)); }
+
+        //======================================================================
         // The test rig (PLAN.md §7.3). Message thread.
 
         // ~/Music/TonnetzML/TestRig: Keys.txt is read from it, Status.txt written to it.
@@ -77,21 +110,39 @@ namespace tonnetz
 
         // Audio thread.
         RigPlayer rig;
-        BlockEvents rigEvents;
+        BlockEvents rigEvents, engineIn, engineOut;
+        LatticeEngine engine;
+        EngineSettings engineSettings;
         juce::MidiBuffer merged;            // sized in prepareToPlay
+        std::atomic<float>* slotParam = nullptr;
+        std::atomic<float>* gatherParam = nullptr;
+        std::atomic<float>* mixParam = nullptr;
+        std::atomic<float>* sourceChannelParam = nullptr;
+        std::atomic<float>* genChannelParam = nullptr;
+        std::atomic<float>* registerParam = nullptr;
+        std::atomic<float>* bassParam = nullptr;
+        std::atomic<float>* octaveParam = nullptr;
         Transport lastTransport;
         std::atomic<bool> resetRequested { false };
         std::atomic<double> preparedSampleRate { 44100.0 };
 
         // Message thread → audio thread.
         SnapshotExchange<RigKeys> rigKeysForAudio;
+        SnapshotExchange<SlotWords> slotWordsForAudio;
 
         // Audio thread → message thread, for Status.txt.
         std::atomic<bool> statPlaying { false };
         std::atomic<int> statHeld { 0 };
         std::atomic<uint32_t> statNoteOns { 0 }, statNoteOffs { 0 };
+        std::atomic<int> statBlock { 0 }, statMaxBlock { 0 };
+        std::atomic<double> statRate { 0.0 };
+        std::atomic<int> statSourceMask { 0 }, statSourceLowest { -1 }, statGenMask { 0 }, statGenLowest { -1 }, statSounding { 0 };
 
-        // Message thread.
+        // Message thread (getStateInformation may come from another thread: the lock).
+        SlotWords slotWords;
+        juce::CriticalSection slotLock;
+        void publishSlotWords();
+
         juce::File rigFolder { defaultRigFolder() };
         struct FileStamp
         {

@@ -1,16 +1,26 @@
 // Editor snapshot and host test (PLAN.md §7.2). Runs the real processor and editor without a
-// host. Phase 0 checks:
+// host. Checks (Phase 0, extended in Phase 2):
 //
-//   1. editor   the placeholder editor opens at its smallest size (760×520) and a large one, and
+//   1. editor   the stub editor opens at its smallest size (760×520) and a large one, and
 //               renders; each image is compared with Tests/fixtures/snapshot/*.png (at most 0.5%
-//               of pixels may differ by more than 24 levels)
-//   2. through  MIDI in comes out byte for byte, playing, stopped and bypassed; the audio is silent
+//               of pixels may differ by more than 24 levels). Its word field shows the current
+//               slot's word, stores a word typed into it, refuses text that isn't one, and
+//               follows the slot parameter
+//   2. through  bypassed and Enable off, MIDI in comes out byte for byte; enabled, everything
+//               that isn't a note still does; the audio is silent
 //   3. rig      with Test rig on, Keys.txt (in a temporary rig folder) plays on the sample from
-//               the play head, merged with the host's MIDI; Status.txt says so; a stop, Enable
-//               off and bypass end the held keys; an edited Keys.txt is picked up
-//   4. realtime no allocation in processBlock while the rig plays (a malloc hook counts every
-//               one on the audio thread)
-//   5. state    a saved state restores the parameters into a new instance; garbage is ignored
+//               the play head, merged with the host's MIDI (Mix: Source only shows it as it
+//               came); Status.txt says so; a stop, Enable off and bypass end the held keys; an
+//               edited Keys.txt is picked up
+//   4. mirror   (Phase 2) the rig and host chords come out as W(chord) on the generated channel,
+//               after the gather window, for each factory slot; Mix and channels; Status.txt
+//               names the slot, word and chords
+//   5. params   the ten parameters in order, with their defaults
+//   6. realtime no allocation in processBlock while the rig plays through the engine (a malloc
+//               hook counts every one on the audio thread)
+//   7. state    a saved state restores the parameters and the slot words into a new instance;
+//               a state without slot words, or with a bad one, gets the factory words; garbage
+//               is ignored
 //
 // Later phases add the lattice images, hit-testing and "every parameter has a control".
 //
@@ -65,6 +75,19 @@ namespace
             param->setValueNotifyingHost (on ? 1.0f : 0.0f);
     }
 
+    // A parameter to a plain value (a choice's index, an int's value).
+    void setPlain (TonnetzProcessor& p, const char* id, float value)
+    {
+        if (auto* param = p.getState().getParameter (id))
+            param->setValueNotifyingHost (param->convertTo0to1 (value));
+    }
+
+    float plain (TonnetzProcessor& p, const char* id)
+    {
+        auto* param = p.getState().getParameter (id);
+        return param != nullptr ? param->convertFrom0to1 (param->getValue()) : -999.0f;
+    }
+
     struct PlayHead : juce::AudioPlayHead
     {
         bool playing = true;
@@ -85,7 +108,12 @@ namespace
     {
         juce::int64 sample;
         int note, velocity;                 // velocity 0: a note-off
-        bool operator== (const Note& o) const { return std::abs (sample - o.sample) <= 1 && note == o.note && velocity == o.velocity; }
+        int channel = 0;                    // 1..16; 0: not compared
+        bool operator== (const Note& o) const
+        {
+            return std::abs (sample - o.sample) <= 1 && note == o.note && velocity == o.velocity
+                && (channel == 0 || o.channel == 0 || channel == o.channel);
+        }
     };
 
     // A little host: one processor, blocks of 256 at 48 kHz, a play head.
@@ -126,7 +154,7 @@ namespace
             {
                 const auto m = meta.getMessage();
                 if (m.isNoteOnOrOff())
-                    notes.push_back ({ pos + meta.samplePosition, m.getNoteNumber(), m.isNoteOn() ? (int) m.getVelocity() : 0 });
+                    notes.push_back ({ pos + meta.samplePosition, m.getNoteNumber(), m.isNoteOn() ? (int) m.getVelocity() : 0, m.getChannel() });
             }
             if (head.playing)
                 head.ppq += block * head.bpm / (60.0 * rate);
@@ -232,6 +260,21 @@ namespace
         check (editor->isResizable() && editor->getWidth() == 200, "resizable (the host is held to 760 x 520 by the constrainer)");
         if (auto* c = editor->getConstrainer())
             check (c->getMinimumWidth() == TonnetzEditor::minWidth && c->getMinimumHeight() == TonnetzEditor::minHeight, "smallest size 760 x 520");
+
+        // The word field (Phase 2).
+        auto& ed = dynamic_cast<TonnetzEditor&> (*editor);
+        check (ed.wordField().getText() == "P", "the word field shows slot A's word (P)");
+        ed.wordField().setText (juce::String::fromUTF8 ("P\xc2\xb7L R"), false);   // P·L R
+        ed.commitWord();
+        check (printWord (p.getSlotWord (0)).c_str() == std::string ("P L R") && ed.wordField().getText() == "P L R",
+               "a word typed in is stored in the slot and shown as printed (P L R)");
+        ed.wordField().setText ("P Q", false);
+        ed.commitWord();
+        check (printWord (p.getSlotWord (0)).c_str() == std::string ("P L R") && ed.wordMessage().startsWith ("Not a word"),
+               "text that isn't a word is refused, and the slot keeps its word");
+        setPlain (p, params::slot, 4.0f);
+        juce::MessageManager::getInstance()->runDispatchLoopUntil (300);
+        check (ed.wordField().getText() == "P L", "the field follows the slot parameter (E: P L)");
     }
 
     void testThrough()
@@ -255,7 +298,7 @@ namespace
             return a == in.end() && b == out.end();
         };
 
-        for (const char* mode : { "playing", "stopped", "bypassed", "Enable off", "Test rig on, no keys" })
+        for (const char* mode : { "bypassed", "Enable off" })
         {
             MiniHost h;
             const juce::String m (mode);
@@ -274,6 +317,40 @@ namespace
                 ok = ok && same (h.midi);
             }
             check (ok && h.peak == 0.0f, juce::String ("MIDI through unchanged, audio silent: ") + mode);
+        }
+
+        // Enabled: everything that isn't a note goes through byte for byte. (The lone note is
+        // let go inside the gather window, so it never sounds.)
+        juce::MidiBuffer others;
+        for (const auto meta : in)
+            if (! meta.getMessage().isNoteOnOrOff())
+                others.addEvent (meta.getMessage(), meta.samplePosition);
+        const auto sameOthers = [&others] (const juce::MidiBuffer& out)
+        {
+            auto a = others.begin(), b = out.begin();
+            for (; a != others.end() && b != out.end(); ++a, ++b)
+                if ((*a).samplePosition != (*b).samplePosition || (*a).numBytes != (*b).numBytes
+                    || std::memcmp ((*a).data, (*b).data, (size_t) (*a).numBytes) != 0)
+                    return false;
+            return a == others.end() && b == out.end();
+        };
+        for (const char* mode : { "playing", "stopped", "Test rig on, no keys" })
+        {
+            MiniHost h;
+            const juce::String m (mode);
+            h.head.playing = m != "stopped";
+            if (m.startsWith ("Test rig"))
+            {
+                h.p->setRigFolder (juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("TonnetzML-no-such-rig"));
+                set (*h.p, params::testRig, true);
+            }
+            bool ok = true;
+            for (int i = 0; i < 4; ++i)
+            {
+                h.process (in);
+                ok = ok && sameOthers (h.midi);
+            }
+            check (ok && h.peak == 0.0f, juce::String ("enabled: controllers, pitch bend and SysEx through unchanged, audio silent: ") + mode);
         }
     }
 
@@ -301,6 +378,7 @@ namespace
         MiniHost h;
         h.p->setRigFolder (folder);
         set (*h.p, params::testRig, true);
+        setPlain (*h.p, params::mix, 2.0f);           // Source only: the keys as they came, on channel 1
         h.p->pollTestRig();
         check (status().contains ("keys: 9\n") && status().contains ("rejectedLines: 1\n") && status().contains ("keysFile: found"),
                "Status.txt: 9 keys, 1 rejected line");
@@ -330,7 +408,7 @@ namespace
         want.push_back ({ MiniHost::at (2.3333), 64, 70 });
         juce::String why;
         check (sameNotes (h.notes, want, why), "the keys play on their samples, with the host's note " + why);
-        check (allocations == 0, "no allocation in processBlock while the rig plays (" + juce::String (allocations) + ")");
+        check (allocations == 0, "no allocation in processBlock while the rig plays through the engine (" + juce::String (allocations) + ")");
 
         // Stop: the three held keys end.
         h.head.playing = false;
@@ -373,25 +451,179 @@ namespace
         check (h.notes.empty(), "Test rig off again: nothing plays");
     }
 
+    void testParams()
+    {
+        std::cout << "params" << std::endl;
+        TonnetzProcessor p;
+        juce::StringArray ids;
+        for (auto* param : p.getParameters())
+            if (auto* withId = dynamic_cast<juce::AudioProcessorParameterWithID*> (param))
+                ids.add (withId->getParameterID());
+        check (ids.joinIntoString (" ") == "enable testRig slot gatherMs mix sourceChannel genChannel register bass octave",
+               "ten parameters, Phase 2's appended after Enable and Test rig: " + ids.joinIntoString (" "));
+        check (plain (p, params::slot) == 0.0f && plain (p, params::gatherMs) == 20.0f && plain (p, params::mix) == 0.0f
+                   && plain (p, params::sourceChannel) == 1.0f && plain (p, params::genChannel) == 2.0f && plain (p, params::registerMode) == 0.0f
+                   && plain (p, params::bass) == 0.0f && plain (p, params::octave) == 0.0f,
+               "defaults: slot A, gather 20 ms, Mix Generated, source channel 1, generated channel 2, Register Stay, Bass Off, Octave 0");
+        juce::StringArray words;
+        for (int i = 0; i < numSlots; ++i)
+            words.add (TonnetzProcessor::slotName (i) + "=" + juce::String (printWord (p.getSlotWord (i)).c_str()));
+        check (words.joinIntoString (" ") == "A=P B=L C=R D=N E=P L F=P R G=L R H=S", "factory slot words: " + words.joinIntoString (" "));
+        auto* slot = p.getState().getParameter (params::slot);
+        check (slot->getText (slot->convertTo0to1 (4.0f), 8) == "E" && slot->getNumSteps() == 8, "slot is a choice A..H (8 steps)");
+    }
+
+    // The engine through the real processor: host chords and rig keys come out as W(chord).
+    void testMirror (const juce::File& output)
+    {
+        std::cout << "mirror" << std::endl;
+        const auto chordAt = [] (juce::MidiBuffer& b, int sample, std::initializer_list<int> notes, bool on, int velocity = 100)
+        {
+            for (int n : notes)
+                b.addEvent (on ? juce::MidiMessage::noteOn (1, n, (juce::uint8) velocity) : juce::MidiMessage::noteOff (1, n), sample);
+        };
+
+        // Every factory slot on C E G, gather 0: on the chord's sample, channel 2.
+        const std::vector<std::vector<int>> expected { { 60, 63, 67 }, { 59, 64, 67 }, { 60, 64, 69 }, { 60, 65, 68 },
+                                                       { 60, 63, 68 }, { 58, 63, 67 }, { 59, 62, 67 }, { 61, 64, 68 } };
+        for (int slot = 0; slot < numSlots; ++slot)
+        {
+            MiniHost h;
+            setPlain (*h.p, params::slot, (float) slot);
+            setPlain (*h.p, params::gatherMs, 0.0f);
+            juce::MidiBuffer in;
+            chordAt (in, 10, { 60, 64, 67 }, true);
+            h.process (in);
+            juce::MidiBuffer up;
+            chordAt (up, 100, { 60, 64, 67 }, false);
+            h.process (up);
+            std::vector<Note> want;
+            for (int n : expected[(size_t) slot])
+            {
+                want.push_back ({ 10, n, 100, 2 });
+                want.push_back ({ MiniHost::block + 100, n, 0, 2 });
+            }
+            juce::String why;
+            check (sameNotes (h.notes, want, why), "slot " + TonnetzProcessor::slotName (slot) + " (" + printWord (h.p->getSlotWord (slot)).c_str()
+                                                      + ") on C E G, gather 0: on the sample, channel 2 " + why);
+        }
+
+        // Gather 20 ms (the default): the chord sounds 960 samples later; Source + Generated on
+        // channels 3 and 9; a late note retunes; Bass and Octave.
+        {
+            MiniHost h;
+            setPlain (*h.p, params::mix, 1.0f);
+            setPlain (*h.p, params::sourceChannel, 3.0f);
+            setPlain (*h.p, params::genChannel, 9.0f);
+            juce::MidiBuffer in;
+            chordAt (in, 0, { 60, 64 }, true, 90);
+            h.process (in);
+            h.runTo (2048);
+            juce::MidiBuffer late;
+            chordAt (late, 0, { 67 }, true, 70);
+            h.process (late);
+            h.runTo (4096);
+            std::vector<Note> want { { 0, 60, 90, 3 }, { 0, 64, 90, 3 }, { 960, 60, 90, 9 }, { 960, 64, 90, 9 },
+                                     { 2048, 67, 70, 3 }, { 2048 + 960, 64, 0, 9 }, { 2048 + 960, 63, 90, 9 }, { 2048 + 960, 67, 70, 9 } };
+            juce::String why;
+            check (sameNotes (h.notes, want, why), "gather 20 ms, Source + Generated on channels 3 and 9: source at once, generated 960 samples on; "
+                                                   "the late G retunes only E (to Eb) " + why);
+        }
+        {
+            MiniHost h;
+            setPlain (*h.p, params::gatherMs, 0.0f);
+            setPlain (*h.p, params::bass, 1.0f);
+            setPlain (*h.p, params::octave, -1.0f);
+            setPlain (*h.p, params::slot, 2.0f);           // R: A minor
+            juce::MidiBuffer in;
+            chordAt (in, 3, { 60, 64, 67 }, true);
+            h.process (in);
+            std::vector<Note> want { { 3, 48, 100, 2 }, { 3, 52, 100, 2 }, { 3, 57, 100, 2 }, { 3, 33, 100, 2 } };
+            juce::String why;
+            check (sameNotes (h.notes, want, why), "R with Octave -1 and Bass Root below: A minor an octave down, A1 under it " + why);
+        }
+
+        // The rig (Keys.txt) through Mirror, as in the Live check: Status.txt names it all.
+        const auto folder = output.getChildFile ("rig-mirror");
+        folder.deleteRecursively();
+        folder.createDirectory();
+        folder.getChildFile ("Keys.txt").replaceWithText ("1 60 100 2\n1 64 100 2\n1 67 100 2\n");
+        MiniHost h;
+        h.p->setRigFolder (folder);
+        set (*h.p, params::testRig, true);
+        setPlain (*h.p, params::slot, 4.0f);               // E: P L
+        setPlain (*h.p, params::gatherMs, 0.0f);
+        h.p->pollTestRig();
+        h.runTo (MiniHost::at (2.0));
+        juce::Thread::sleep (300);
+        h.p->pollTestRig();
+        const auto status = folder.getChildFile ("Status.txt").loadFileAsString();
+        check (status.contains ("slot: E\n") && status.contains ("word: P L\n") && status.contains ("source: C\n")
+                   && status.contains ("generated: Ab/C\n") && status.contains ("sounding: 3\n"),
+               "Status.txt: slot E, word P L, source C, generated Ab/C, 3 sounding");
+        h.runTo (MiniHost::at (4.0));
+        std::vector<Note> want;
+        for (int n : { 60, 63, 68 })
+        {
+            want.push_back ({ MiniHost::at (1.0), n, 100, 2 });
+            want.push_back ({ MiniHost::at (3.0), n, 0, 2 });
+        }
+        juce::String why;
+        check (sameNotes (h.notes, want, why), "the rig's C E G under P L: C Eb Ab on channel 2, on the beat " + why);
+    }
+
     void testState()
     {
         std::cout << "state" << std::endl;
         TonnetzProcessor a;
-        check (a.getParameters().size() == 2, "two parameters in Phase 0 (Enable, Test rig)");
         check (a.getState().getParameter (params::enable)->getValue() == 1.0f && a.getState().getParameter (params::testRig)->getValue() == 0.0f,
                "defaults: Enable on, Test rig off");
         set (a, params::enable, false);
+        setPlain (a, params::slot, 6.0f);
+        setPlain (a, params::gatherMs, 37.0f);
+        setPlain (a, params::mix, 2.0f);
+        setPlain (a, params::sourceChannel, 7.0f);
+        setPlain (a, params::genChannel, 16.0f);
+        setPlain (a, params::registerMode, 1.0f);
+        setPlain (a, params::bass, 1.0f);
+        setPlain (a, params::octave, -2.0f);
+        check (a.setSlotWordText (0, "Grow(0,4) P +M3 Shrink") && a.setSlotWordText (7, "T(2,-1) Flip(0,7) Pivot(4) H"), "slot words set from text");
         juce::MemoryBlock saved;
         a.getStateInformation (saved);
 
         TonnetzProcessor b;
         b.setStateInformation (saved.getData(), (int) saved.getSize());
-        check (b.getState().getParameter (params::enable)->getValue() == 0.0f, "a saved state restores into a new instance");
+        check (b.getState().getParameter (params::enable)->getValue() == 0.0f && plain (b, params::slot) == 6.0f && plain (b, params::gatherMs) == 37.0f
+                   && plain (b, params::mix) == 2.0f && plain (b, params::sourceChannel) == 7.0f && plain (b, params::genChannel) == 16.0f
+                   && plain (b, params::registerMode) == 1.0f && plain (b, params::bass) == 1.0f && plain (b, params::octave) == -2.0f,
+               "a saved state restores every parameter into a new instance");
+        bool wordsBack = true;
+        for (int i = 0; i < numSlots; ++i)
+            wordsBack = wordsBack && b.getSlotWord (i) == a.getSlotWord (i);
+        check (wordsBack && printWord (b.getSlotWord (0)).c_str() == std::string ("Grow(0,4) P +M3 Shrink"),
+               "and the eight slot words (" + juce::String (printWord (b.getSlotWord (7)).c_str()) + " in H)");
+
+        // A state from Phase 0 (no SLOTS), and one with a word that doesn't parse.
+        auto xml = juce::AudioProcessor::getXmlFromBinary (saved.getData(), (int) saved.getSize());
+        xml->removeChildElement (xml->getChildByName ("SLOTS"), true);
+        juce::MemoryBlock old;
+        juce::AudioProcessor::copyXmlToBinary (*xml, old);
+        b.setStateInformation (old.getData(), (int) old.getSize());
+        check (printWord (b.getSlotWord (0)).c_str() == std::string ("P") && plain (b, params::slot) == 6.0f,
+               "a state without slot words (Phase 0) gets the factory words, parameters still restored");
+        xml = juce::AudioProcessor::getXmlFromBinary (saved.getData(), (int) saved.getSize());
+        xml->getChildByName ("SLOTS")->setAttribute ("A", "P Q nonsense");
+        juce::MemoryBlock bad;
+        juce::AudioProcessor::copyXmlToBinary (*xml, bad);
+        b.setStateInformation (bad.getData(), (int) bad.getSize());
+        check (printWord (b.getSlotWord (0)).c_str() == std::string ("P") && b.getSlotWord (7) == a.getSlotWord (7),
+               "a slot word that doesn't parse gets its factory word; the others are kept");
+        check (! b.getState().state.getChildWithName ("SLOTS").isValid(), "the slot words are not left in the parameter tree");
 
         const char garbage[] = "not a state at all";
         b.setStateInformation (garbage, (int) sizeof (garbage));
         b.setStateInformation (nullptr, 0);
-        check (b.getState().getParameter (params::enable)->getValue() == 0.0f, "garbage is ignored");
+        check (b.getState().getParameter (params::enable)->getValue() == 0.0f && b.getSlotWord (7) == a.getSlotWord (7), "garbage is ignored");
     }
 }
 
@@ -415,6 +647,8 @@ int main (int argc, char* argv[])
     testEditor (fixtures, output);
     testThrough();
     testRig (output);
+    testParams();
+    testMirror (output);
     testState();
 
     std::cout << (failures == 0 ? "\nsnapshot: all passed" : "\n*** snapshot: " + std::to_string (failures) + " failure(s)") << std::endl;
