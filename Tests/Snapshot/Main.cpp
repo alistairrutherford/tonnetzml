@@ -15,12 +15,17 @@
 //   4. mirror   (Phase 2) the rig and host chords come out as W(chord) on the generated channel,
 //               after the gather window, for each factory slot; Mix and channels; Status.txt
 //               names the slot, word and chords
-//   5. params   the ten parameters in order, with their defaults
+//   5. params   the 21 parameters in order (Phase 3's appended after Octave), with their defaults
+//   8. walk     (Phase 3) operator keys from the host and the rig walk a held chord and never
+//               sound; Orbit steps on the beat from the rig; a D major tune from the rig gives a
+//               confident D major in Status.txt with generated chords sounding; Hold copies the
+//               guess into Key tonic / Key minor; no allocation while walking or orbiting
 //   6. realtime no allocation in processBlock while the rig plays through the engine (a malloc
 //               hook counts every one on the audio thread)
 //   7. state    a saved state restores the parameters and the slot words into a new instance;
 //               a state without slot words, or with a bad one, gets the factory words; garbage
-//               is ignored
+//               is ignored; (Phase 3) the current W and the latched chord come back, the chord
+//               silent until the transport starts; a state without them (Phase 2) has neither
 //
 // Later phases add the lattice images, hit-testing and "every parameter has a control".
 //
@@ -459,8 +464,20 @@ namespace
         for (auto* param : p.getParameters())
             if (auto* withId = dynamic_cast<juce::AudioProcessorParameterWithID*> (param))
                 ids.add (withId->getParameterID());
-        check (ids.joinIntoString (" ") == "enable testRig slot gatherMs mix sourceChannel genChannel register bass octave",
-               "ten parameters, Phase 2's appended after Enable and Test rig: " + ids.joinIntoString (" "));
+        check (ids.joinIntoString (" ") == "enable testRig slot gatherMs mix sourceChannel genChannel register bass octave "
+                                           "mode latch walkInput orbitCycle orbitRate opZoneStart opZoneOn key keyTonic keyMinor inKey",
+               juce::String (ids.size()) + " parameters (at most 28), Phase 2's and Phase 3's appended in turn: " + ids.joinIntoString (" "));
+        check (plain (p, params::mode) == 0.0f && plain (p, params::latch) == 0.0f && plain (p, params::walkInput) == 0.0f
+                   && plain (p, params::orbitCycle) == 0.0f && plain (p, params::orbitRate) == 2.0f && plain (p, params::opZoneStart) == 24.0f
+                   && plain (p, params::opZoneOn) == 1.0f && plain (p, params::key) == 1.0f && plain (p, params::keyTonic) == 0.0f
+                   && plain (p, params::keyMinor) == 0.0f && plain (p, params::inKey) == 0.0f,
+               "Phase 3 defaults: Mirror, latch off, Relative, PL, 1 bar, operator keys on from C0 (24), Key Listen, C, major, In key off");
+        auto* zone = p.getState().getParameter (params::opZoneStart);
+        auto* rate = p.getState().getParameter (params::orbitRate);
+        auto* mode = p.getState().getParameter (params::mode);
+        check (zone->getText (zone->convertTo0to1 (24.0f), 8) == "C0" && zone->getText (zone->convertTo0to1 (61.0f), 8) == "C#3"
+                   && rate->getText (rate->convertTo0to1 (0.0f), 16) == "1/4 bar" && mode->getText (mode->convertTo0to1 (2.0f), 16) == "Orbit",
+               "operator keys named as Live names them (24 = C0, 61 = C#3); Orbit rate 1/4 bar; Mode Orbit");
         check (plain (p, params::slot) == 0.0f && plain (p, params::gatherMs) == 20.0f && plain (p, params::mix) == 0.0f
                    && plain (p, params::sourceChannel) == 1.0f && plain (p, params::genChannel) == 2.0f && plain (p, params::registerMode) == 0.0f
                    && plain (p, params::bass) == 0.0f && plain (p, params::octave) == 0.0f,
@@ -572,6 +589,283 @@ namespace
         check (sameNotes (h.notes, want, why), "the rig's C E G under P L: C Eb Ab on channel 2, on the beat " + why);
     }
 
+    // Phase 3 helpers: what sounds on a channel now, and a voicing's pitches.
+    std::set<int> soundingOn (const MiniHost& h, int channel)
+    {
+        std::map<int, int> on;
+        for (const auto& n : h.notes)
+            if (n.channel == channel)
+                on[n.note] += n.velocity > 0 ? 1 : -1;
+        std::set<int> s;
+        for (const auto& [note, c] : on)
+            if (c > 0)
+                s.insert (note);
+        return s;
+    }
+
+    std::set<int> voiced (const char* w, std::initializer_list<int> keys)
+    {
+        Word word;
+        parseWord (w, word);
+        Voicing in, out;
+        for (int n : keys)
+            in.push (n, n);
+        voiceWord (word, inputChord (in), in, {}, out);
+        std::set<int> s;
+        for (const auto& v : out)
+            s.insert (v.pitch);
+        return s;
+    }
+
+    juce::String text (const std::set<int>& s)
+    {
+        juce::StringArray a;
+        for (int n : s)
+            a.add (juce::String (n));
+        return a.joinIntoString (" ");
+    }
+
+    // Keys.txt lines for a tune (C major / A minor as written, `shift` semitones up), from beat 4.
+    juce::String tuneKeys (const std::vector<std::pair<int, double>>& tune, int shift)
+    {
+        juce::String s;
+        double beat = 4.0;
+        for (const auto& [pitch, beats] : tune)
+        {
+            s << juce::String (beat, 4) << " " << (pitch + shift) << " 100 " << juce::String (0.9 * beats, 4) << "\n";
+            beat += beats;
+        }
+        return s;
+    }
+
+    const std::vector<std::pair<int, double>> twinkle { { 60, 1 }, { 60, 1 }, { 67, 1 }, { 67, 1 }, { 69, 1 }, { 69, 1 }, { 67, 2 },
+                                                        { 65, 1 }, { 65, 1 }, { 64, 1 }, { 64, 1 }, { 62, 1 }, { 62, 1 }, { 60, 2 },
+                                                        { 67, 1 }, { 67, 1 }, { 65, 1 }, { 65, 1 }, { 64, 1 }, { 64, 1 }, { 62, 2 },
+                                                        { 67, 1 }, { 67, 1 }, { 65, 1 }, { 65, 1 }, { 64, 1 }, { 64, 1 }, { 62, 2 },
+                                                        { 60, 1 }, { 60, 1 }, { 67, 1 }, { 67, 1 }, { 69, 1 }, { 69, 1 }, { 67, 2 },
+                                                        { 65, 1 }, { 65, 1 }, { 64, 1 }, { 64, 1 }, { 62, 1 }, { 62, 1 }, { 60, 2 } };
+
+    // Walk, Orbit and the key through the real processor (PLAN.md §6 row 3).
+    void testWalkOrbitKey (const juce::File& output)
+    {
+        std::cout << "walk, orbit, key" << std::endl;
+        const auto keyAt = [] (juce::MidiBuffer& b, int sample, std::initializer_list<int> notes, bool on)
+        {
+            for (int n : notes)
+                b.addEvent (on ? juce::MidiMessage::noteOn (1, n, (juce::uint8) 100) : juce::MidiMessage::noteOff (1, n), sample);
+        };
+
+        // Walk from the host: operator keys (C0 = 24 up) walk a held C E G; keys pressed together
+        // retune once; they never sound.
+        {
+            MiniHost h;
+            setPlain (*h.p, params::mode, 1.0f);
+            setPlain (*h.p, params::gatherMs, 0.0f);
+            setPlain (*h.p, params::mix, 1.0f);            // Source + Generated: the source shows the op keys don't sound
+            juce::MidiBuffer a, b, c, d;
+            keyAt (a, 10, { 60, 64, 67 }, true);
+            h.process (a);
+            const auto first = soundingOn (h, 2);
+            h.runTo (h.pos + 20 * MiniHost::block);       // the listener estimates every 50 ms of listening
+            keyAt (b, 20, { 24 }, true);                   // P
+            h.process (b);
+            const auto afterP = soundingOn (h, 2);
+            keyAt (c, 30, { 25, 30 }, true);               // L and +5 together
+            h.process (c);
+            const auto afterLFifth = soundingOn (h, 2);
+            const size_t eventsBefore = h.notes.size();
+            keyAt (d, 5, { 24, 25, 30 }, false);           // operator key-ups: nothing
+            keyAt (d, 6, { 35 }, true);                    // Home
+            h.process (d);
+            const auto home = soundingOn (h, 2);
+            bool noOpKeys = true;
+            for (const auto& n : h.notes)
+                noOpKeys = noOpKeys && (n.note < 24 || n.note > 35);
+            check (first == voiced ("", { 60, 64, 67 }) && afterP == voiced ("P", { 60, 64, 67 }) && afterLFifth == voiced ("P L +5", { 60, 64, 67 })
+                       && home == voiced ("", { 60, 64, 67 }) && noOpKeys && soundingOn (h, 1) == std::set<int> { 60, 64, 67 },
+                   "Walk: P, then L and +5 together, then Home on a held C E G (" + text (afterP) + " / " + text (afterLFifth) + " / " + text (home)
+                       + "); operator keys never sound");
+            // L and +5 on one sample: each voice moved once (no note both started and ended on that sample).
+            int zeroLength = 0;
+            for (size_t i = 0; i < eventsBefore; ++i)
+                for (size_t j = 0; j < eventsBefore; ++j)
+                    zeroLength += h.notes[i].velocity > 0 && h.notes[j].velocity == 0 && h.notes[i].note == h.notes[j].note
+                                  && h.notes[i].sample == h.notes[j].sample && h.notes[i].channel == 2 && h.notes[j].channel == 2 && j > i ? 1 : 0;
+            check (zeroLength == 0, "two operator keys on one sample give one retune (no zero-length notes)");
+            check (KeyGuess::unpack (h.p->getEngineStatus().keyGuess).notes == 3, "the key listener heard the 3 source notes, not the 4 operator keys");
+        }
+
+        // The rig: a held chord walked by operator keys in Keys.txt, then Orbit, with no allocation.
+        const auto folder = output.getChildFile ("rig-walk");
+        folder.deleteRecursively();
+        folder.createDirectory();
+        const auto statusFile = folder.getChildFile ("Status.txt");
+        folder.getChildFile ("Keys.txt").replaceWithText ("4 60 100 12\n4 64 100 12\n4 67 100 12\n6 24 100 0.5\n8 25 100 0.5\n10 33 100 0.5\n");
+        {
+            MiniHost h;
+            h.p->setRigFolder (folder);
+            set (*h.p, params::testRig, true);
+            setPlain (*h.p, params::mode, 1.0f);
+            setPlain (*h.p, params::gatherMs, 0.0f);
+            h.p->pollTestRig();
+            h.process();
+            int allocations = 0;
+            {
+                AllocWatch watch;
+                const int before = allocCount.load();
+                h.runTo (MiniHost::at (11.0));
+                allocations = allocCount.load() - before;
+            }
+            juce::Thread::sleep (300);
+            h.p->pollTestRig();
+            const auto status = statusFile.loadFileAsString();
+            check (soundingOn (h, 2) == voiced ("P L -M3", { 60, 64, 67 }) && status.contains ("mode: Walk\n") && status.contains ("word: P L -M3\n")
+                       && status.contains ("walk: P L -M3\n") && status.contains ("wordOps: 3\n"),
+                   "the rig walks C E G with P, L, -M3 from Keys.txt: " + text (soundingOn (h, 2)) + "; Status.txt: mode Walk, word P L -M3");
+            check (allocations == 0, "no allocation in processBlock while the rig walks (" + juce::String (allocations) + ")");
+        }
+        folder.getChildFile ("Keys.txt").replaceWithText ("4 60 100 8\n4 64 100 8\n4 67 100 8\n");
+        {
+            MiniHost h;
+            h.p->setRigFolder (folder);
+            set (*h.p, params::testRig, true);
+            setPlain (*h.p, params::mode, 2.0f);           // Orbit
+            setPlain (*h.p, params::orbitCycle, 0.0f);     // PL
+            setPlain (*h.p, params::orbitRate, 0.0f);      // 1/4 bar: every beat
+            setPlain (*h.p, params::gatherMs, 0.0f);
+            h.p->pollTestRig();
+            h.process();
+            int allocations = 0;
+            {
+                AllocWatch watch;
+                const int before = allocCount.load();
+                h.runTo (MiniHost::at (7.5));
+                allocations = allocCount.load() - before;
+            }
+            juce::Thread::sleep (300);
+            h.p->pollTestRig();
+            const auto status = statusFile.loadFileAsString();
+            // Steps at beats 5, 6 and 7: W = P L P.
+            std::set<int> stepAt7;
+            for (const auto& n : h.notes)
+                if (n.velocity > 0 && n.sample == MiniHost::at (7.0))
+                    stepAt7.insert (n.note);
+            check (soundingOn (h, 2) == voiced ("P L P", { 60, 64, 67 }) && ! stepAt7.empty() && status.contains ("mode: Orbit\n")
+                       && status.contains ("word: P L P\n") && status.contains ("orbitStep: 3\n"),
+                   "Orbit PL at 1/4 bar from the rig: C E G stepped on beats 5, 6, 7 to " + text (soundingOn (h, 2)) + " (the step at 7 on its sample); Status.txt: orbitStep 3");
+            check (allocations == 0, "no allocation in processBlock while Orbit steps (" + juce::String (allocations) + ")");
+        }
+
+        // The key: a tune in D major from the rig under Mirror PL; Status.txt shows the guess,
+        // confident, with the generated chords sounding; Hold copies it into keyTonic / keyMinor.
+        folder.getChildFile ("Keys.txt").replaceWithText (tuneKeys (twinkle, 2));
+        {
+            MiniHost h;
+            h.p->setRigFolder (folder);
+            set (*h.p, params::testRig, true);
+            setPlain (*h.p, params::slot, 4.0f);           // E: P L
+            setPlain (*h.p, params::gatherMs, 0.0f);
+            h.p->pollTestRig();
+            h.process();
+            h.runTo (MiniHost::at (54.0));
+            juce::Thread::sleep (300);
+            h.p->pollTestRig();
+            const auto status = statusFile.loadFileAsString();
+            int generated = 0;
+            for (const auto& n : h.notes)
+                generated += n.channel == 2 && n.velocity > 0 ? 1 : 0;
+            check (status.contains ("key: D major\n") && status.contains ("keyState: confident\n") && status.contains ("keyMode: Listen\n")
+                       && status.contains ("keyInForce: D major\n") && status.contains ("keyNotes: 42\n") && generated >= 42,
+                   "a D major tune from the rig under P L: Status.txt says D major, confident, from the 42 source notes; " + juce::String (generated) + " generated notes");
+            setPlain (*h.p, params::key, 2.0f);
+            h.process();
+            h.p->followKeyMode();
+            check (plain (*h.p, params::keyTonic) == 2.0f && plain (*h.p, params::keyMinor) == 0.0f, "Key Listen to Hold copies the guess into Key tonic (D) and Key minor (off)");
+            h.process();
+            juce::Thread::sleep (300);
+            h.p->pollTestRig();
+            check (statusFile.loadFileAsString().contains ("keyMode: Hold\n") && statusFile.loadFileAsString().contains ("keyInForce: D major\n"),
+                   "Status.txt: Hold, D major in force");
+        }
+    }
+
+    // Phase 3's parameters and the engine's state (the current W and Latch's chord).
+    void testWalkState()
+    {
+        std::cout << "walk state" << std::endl;
+        TonnetzProcessor a;
+        const std::pair<const char*, float> values[] = { { params::mode, 3.0f }, { params::latch, 1.0f }, { params::walkInput, 1.0f },
+                                                         { params::orbitCycle, 4.0f }, { params::orbitRate, 4.0f }, { params::opZoneStart, 96.0f },
+                                                         { params::opZoneOn, 0.0f }, { params::key, 2.0f }, { params::keyTonic, 10.0f },
+                                                         { params::keyMinor, 1.0f }, { params::inKey, 1.0f } };
+        for (const auto& [id, v] : values)
+            setPlain (a, id, v);
+        juce::MemoryBlock saved;
+        a.getStateInformation (saved);
+        TonnetzProcessor b;
+        b.setStateInformation (saved.getData(), (int) saved.getSize());
+        bool all = true;
+        for (const auto& [id, v] : values)
+            all = all && plain (b, id) == v;
+        check (all, "every Phase 3 parameter comes back in a new instance");
+        b.followKeyMode();
+        check (plain (b, params::keyTonic) == 10.0f, "a state saved in Hold keeps its key (no guess is copied over it)");
+
+        // W and a latched chord: walked and latched in one instance, saved, restored in another.
+        MiniHost h;
+        setPlain (*h.p, params::mode, 1.0f);
+        setPlain (*h.p, params::latch, 1.0f);
+        setPlain (*h.p, params::gatherMs, 0.0f);
+        juce::MidiBuffer on, op, off;
+        for (int n : { 60, 64, 67 }) on.addEvent (juce::MidiMessage::noteOn (1, n, (juce::uint8) 90), 3);
+        op.addEvent (juce::MidiMessage::noteOn (1, 25, (juce::uint8) 100), 3);        // L
+        for (int n : { 60, 64, 67 }) off.addEvent (juce::MidiMessage::noteOff (1, n), 3);
+        h.process (on);
+        h.process (op);
+        h.process (off);
+        h.process();
+        const auto latchedSound = soundingOn (h, 2);
+        h.p->getStateInformation (saved);
+        const auto xml = juce::AudioProcessor::getXmlFromBinary (saved.getData(), (int) saved.getSize());
+        const auto* walk = xml != nullptr ? xml->getChildByName ("WALK") : nullptr;
+        check (latchedSound == voiced ("L", { 60, 64, 67 }) && walk != nullptr && walk->getStringAttribute ("word") == "L"
+                   && walk->getStringAttribute ("latched") == "60:90 64:90 67:90",
+               "a chord latched and walked by L sounds on after its keys are up (" + text (latchedSound) + "); the state has WALK word=L latched="
+                   + (walk != nullptr ? walk->getStringAttribute ("latched") : juce::String()));
+
+        MiniHost r;
+        r.head.playing = false;
+        r.p->setStateInformation (saved.getData(), (int) saved.getSize());
+        const auto back = r.p->getWalkState();
+        check (printWord (back.word).c_str() == std::string ("L") && back.latched[60] == 90 && back.latched[64] == 90 && back.latched[67] == 90,
+               "restored into a new instance: W = L and the latched C E G, before any block");
+        r.runTo (4 * MiniHost::block);
+        const bool silent = r.notes.empty();
+        r.head.playing = true;
+        const auto startAt = r.pos;
+        r.process();
+        std::set<int> started;
+        for (const auto& n : r.notes)
+            if (n.velocity > 0 && n.sample == startAt && n.channel == 2)
+                started.insert (n.note);
+        check (silent && started == voiced ("L", { 60, 64, 67 }), "it is silent while stopped and sounds when the transport starts: " + text (started));
+        r.head.playing = false;
+        r.process();
+        check (r.sounding() == 0, "stop ends it");
+
+        // A Phase 2 state (no WALK): no W, nothing latched.
+        auto old = juce::AudioProcessor::getXmlFromBinary (saved.getData(), (int) saved.getSize());
+        old->removeChildElement (old->getChildByName ("WALK"), true);
+        juce::MemoryBlock phase2;
+        juce::AudioProcessor::copyXmlToBinary (*old, phase2);
+        r.p->setStateInformation (phase2.getData(), (int) phase2.getSize());
+        const auto none = r.p->getWalkState();
+        bool nothingLatched = true;
+        for (const auto v : none.latched)
+            nothingLatched = nothingLatched && v == 0;
+        check (none.word.empty() && none.orbitStep == 0 && nothingLatched, "a state from before Phase 3 has an empty W and nothing latched");
+    }
+
     void testState()
     {
         std::cout << "state" << std::endl;
@@ -620,6 +914,8 @@ namespace
                "a slot word that doesn't parse gets its factory word; the others are kept");
         check (! b.getState().state.getChildWithName ("SLOTS").isValid(), "the slot words are not left in the parameter tree");
 
+        check (! b.getState().state.getChildWithName ("WALK").isValid(), "nor are W and the latched chord");
+
         const char garbage[] = "not a state at all";
         b.setStateInformation (garbage, (int) sizeof (garbage));
         b.setStateInformation (nullptr, 0);
@@ -649,7 +945,9 @@ int main (int argc, char* argv[])
     testRig (output);
     testParams();
     testMirror (output);
+    testWalkOrbitKey (output);
     testState();
+    testWalkState();
 
     std::cout << (failures == 0 ? "\nsnapshot: all passed" : "\n*** snapshot: " + std::to_string (failures) + " failure(s)") << std::endl;
     return failures == 0 ? 0 : 1;

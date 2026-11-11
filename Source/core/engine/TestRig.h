@@ -181,13 +181,19 @@ namespace tonnetz
             return s < offset ? offset : (s > numSamples - 1 ? numSamples - 1 : (int) s);
         }
 
-        // The keys that start or end in [from, to): gathered, put in sample order (ups first),
-        // then played through the held-key counts, so two keys on one pitch restrike rather than
-        // cut each other off, whatever their order in the file.
+        // The keys that start or end in [from, to), less half a sample (so each lands on its
+        // nearest sample: one in a block's last half-sample is the next block's first sample, not
+        // this block's last; Phase 3, so a chord on an Orbit line lands on the line's sample):
+        // gathered, put in sample order (ups first), then played through the held-key counts, so
+        // two keys on one pitch restrike rather than cut each other off, whatever their order in
+        // the file.
         template <class Out>
         void segment (const RigKeys& k, double from, double to, double basePpq, double spb, int offset, int numSamples, Out& out) noexcept
         {
             due.clear();
+            const double half = 0.5 / spb;
+            from -= half;
+            to -= half;
             for (int i = 0; i < k.count; ++i)
             {
                 const auto& key = k.keys[(size_t) i];

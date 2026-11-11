@@ -38,6 +38,7 @@
 #include <array>
 #include <cstdint>
 #include <type_traits>
+#include <utility>
 
 namespace tonnetz
 {
@@ -270,19 +271,22 @@ namespace tonnetz
         }
     }
 
-    // `in` (the input keys' pitches, owners = keys) under `word` from `start` (the input chord,
-    // anchored at its root): the voicing in `out`, and the output chord. `stepTrace`, if given,
-    // is called after every op with the voicing before and after it (tests).
-    template <class Trace>
-    Chord voiceWord (const Word& word, const Chord& start, const Voicing& in, const VoicerSettings& settings,
-                     Voicing& out, Trace&& stepTrace) noexcept
+    // `in` (the input keys' pitches, owners = keys) under `count` ops, the i-th `opAt (i)`, from
+    // `start` (the input chord, anchored at its root): the voicing in `out`, and the output chord.
+    // `stepTrace`, if given, is called after every op with the voicing before and after it
+    // (tests). Orbit's word (a cycle stepped past 32 ops) comes through here; a Word through
+    // voiceWord below.
+    template <class OpAt, class Trace>
+    Chord voiceOps (int count, OpAt&& opAt, const Chord& start, const Voicing& in, const VoicerSettings& settings,
+                    Voicing& out, Trace&& stepTrace) noexcept
     {
         out = in;
         const double sourceCentre = in.centre();
         WordRunner run (start);
         int grown = 0;
-        for (const auto& op : word)
+        for (int i = 0; i < count; ++i)
         {
+            const Op op = opAt (i);
             const Chord from = run.chord();
             const Step s = run.step (op);
             if constexpr (! std::is_same_v<std::decay_t<Trace>, std::nullptr_t>)
@@ -306,6 +310,13 @@ namespace tonnetz
         }
         voicer::clamp (out);
         return run.chord();
+    }
+
+    template <class Trace>
+    Chord voiceWord (const Word& word, const Chord& start, const Voicing& in, const VoicerSettings& settings,
+                     Voicing& out, Trace&& stepTrace) noexcept
+    {
+        return voiceOps (word.size, [&word] (int i) { return word[i]; }, start, in, settings, out, std::forward<Trace> (stepTrace));
     }
 
     inline Chord voiceWord (const Word& word, const Chord& start, const Voicing& in, const VoicerSettings& settings, Voicing& out) noexcept

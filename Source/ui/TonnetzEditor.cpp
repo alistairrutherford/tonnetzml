@@ -29,6 +29,7 @@ namespace tonnetz
         setResizeLimits (minWidth, minHeight, 2400, 1600);
         setSize (minWidth, minHeight);
         showSlot();
+        refreshStatus();
         startTimerHz (10);
     }
 
@@ -68,8 +69,33 @@ namespace tonnetz
         repaint();
     }
 
+    // "Walk · W = P L · D major 90%": the mode, W as it stands, the key (hollow ◦ while tentative).
+    void TonnetzEditor::refreshStatus()
+    {
+        const auto s = processor.getEngineStatus();
+        const int mode = juce::jlimit (0, 3, (int) std::lround (processor.getState().getRawParameterValue (params::mode)->load()));
+        // Mirror's W is the slot's word, whether or not the audio thread has run yet.
+        juce::String w = juce::String::fromUTF8 (printWord (mode == (int) Mode::Mirror ? processor.getSlotWord (processor.currentSlot()) : s.current).c_str());
+        if (mode != (int) Mode::Mirror && s.currentOps > s.current.size)
+            w << juce::String::fromUTF8 (" \u2026 (") << s.currentOps << " ops)";
+        const auto g = KeyGuess::unpack (s.keyGuess);
+        juce::String key = "no key";
+        if (s.keyTonic >= 0)
+            key = juce::String (guessKeyName (s.keyTonic, s.keyMinor)) + (s.keyMinor ? " minor" : " major");
+        if (g.has() && g.tonic == s.keyTonic && g.minor == s.keyMinor)
+            key << " " << g.fit << "%" << (g.state == GuessState::Confident ? "" : " ?");
+        const auto dot = juce::String::fromUTF8 ("  \u00b7  ");
+        const auto line = juce::String (modeNames[mode]) + dot + "W = " + (w.isEmpty() ? juce::String ("(none)") : w) + dot + key;
+        if (line != engineLine)
+        {
+            engineLine = line;
+            repaint();
+        }
+    }
+
     void TonnetzEditor::timerCallback()
     {
+        refreshStatus();
         if (! word.hasKeyboardFocus (true))
             showSlot();
         else if (processor.currentSlot() != shownSlot)
@@ -95,8 +121,11 @@ namespace tonnetz
 
         g.setFont (juce::FontOptions (14.0f));
         g.setColour (faint);
-        g.drawText ("Mirror: every chord comes out as W(chord). The lattice arrives in Phase 4.",
+        g.drawText ("Every chord comes out as W(chord): Mirror, Walk (operator keys), Orbit. The lattice arrives in Phase 4.",
                     juce::Rectangle<int> (0, b.getCentreY() - 62, b.getWidth(), 20), juce::Justification::centred);
+        g.setColour (ink);
+        g.drawText (engineLine, juce::Rectangle<int> (0, b.getCentreY() + 100, b.getWidth(), 20),
+                    juce::Justification::centred);
 
         g.setColour (ink);
         g.setFont (juce::FontOptions (16.0f));

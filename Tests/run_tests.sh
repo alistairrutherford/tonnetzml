@@ -44,6 +44,8 @@ compile_and_run test_lattice
 compile_and_run test_ops
 compile_and_run test_voicing
 compile_and_run test_engine
+compile_and_run test_orbit
+compile_and_run test_keys
 compile_and_run test_edge
 
 # The offline render for the Live checks (PLAN.md §7.4): built, and run once on a known scenario.
@@ -51,11 +53,21 @@ echo "== building render_scenario =="
 compile render_scenario
 printf '4 60 100 1\n4 64 100 1\n4 67 100 1\n' > "$BUILD/render_smoke.txt"
 if "$BUILD/render_scenario" --gather 0 --word P "$BUILD/render_smoke.txt" | tr -d ' \n' \
-        | grep -q '"notes":\[{"pitch":60,"start":4.000000,"length":1.000000,"velocity":100,"channel":2},{"pitch":63,'; then
+        | grep -q '"notes":\[{"pitch":60,"start":4.000000,"length":1.000000,"velocity":100,"channel":2,"ppq":4.000000},{"pitch":63,'; then
     echo "  PASS  render_scenario: C E G under P renders as C Eb G on channel 2"
 else
     echo "  FAIL  render_scenario: unexpected output" >&2
     "$BUILD/render_scenario" --gather 0 --word P "$BUILD/render_smoke.txt" >&2
+    exit 1
+fi
+
+printf '4 60 100 16\n4 64 100 16\n4 67 100 16\n' > "$BUILD/render_orbit.txt"
+if "$BUILD/render_scenario" --gather 0 --mode orbit --cycle PL "$BUILD/render_orbit.txt" | tr -d ' \n' \
+        | grep -q '{"pitch":63,"start":8.000000,"length":12.000000,"velocity":100,"channel":2,"ppq":8.000000},{"pitch":68,"start":12.000000'; then
+    echo "  PASS  render_scenario: Orbit PL on C E G steps on the bar lines (Cm at 8, Ab at 12)"
+else
+    echo "  FAIL  render_scenario: unexpected Orbit output" >&2
+    "$BUILD/render_scenario" --gather 0 --mode orbit --cycle PL "$BUILD/render_orbit.txt" >&2
     exit 1
 fi
 

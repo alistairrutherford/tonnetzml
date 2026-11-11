@@ -1,9 +1,13 @@
-// TonnetzML's processor. Phase 2 (PLAN.md §6): Mirror. The host's notes (and the test rig's keys,
-// §7.3, as if they came from the host) go through the LatticeEngine: every chord comes out as
-// W(chord), W the current slot's word. Other MIDI goes through. The audio output is silent.
+// TonnetzML's processor. Phase 3 (PLAN.md §6): Mirror, Walk, Orbit and the key. The host's notes
+// (and the test rig's keys, §7.3, as if they came from the host) go through the LatticeEngine:
+// every chord comes out as W(chord), W the slot's word (Mirror), the word the operator keys walk
+// (Walk, Explore) or a cycle stepped on the host's grid (Orbit). The key listener hears the
+// source notes. Other MIDI goes through. The audio output is silent.
 //
 // The eight slot words are plug-in state, not parameters (§3.7): kept on the message thread,
-// saved with the set, handed to the audio thread through a SnapshotExchange.
+// saved with the set, handed to the audio thread through a SnapshotExchange. So are the current
+// W (Walk's word and Orbit's step) and Latch's chord, which the audio thread owns: it publishes
+// them every block, and a restored state goes back to it as a request.
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
@@ -29,6 +33,18 @@ namespace tonnetz
         inline constexpr const char* registerMode = "register";
         inline constexpr const char* bass = "bass";
         inline constexpr const char* octave = "octave";
+        // Phase 3 (appended).
+        inline constexpr const char* mode = "mode";
+        inline constexpr const char* latch = "latch";
+        inline constexpr const char* walkInput = "walkInput";
+        inline constexpr const char* orbitCycle = "orbitCycle";
+        inline constexpr const char* orbitRate = "orbitRate";
+        inline constexpr const char* opZoneStart = "opZoneStart";
+        inline constexpr const char* opZoneOn = "opZoneOn";
+        inline constexpr const char* key = "key";
+        inline constexpr const char* keyTonic = "keyTonic";
+        inline constexpr const char* keyMinor = "keyMinor";
+        inline constexpr const char* inKey = "inKey";
 
         juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
     }
@@ -41,6 +57,24 @@ namespace tonnetz
 
     // The factory words (LatticeEngine.h).
     SlotWords factorySlotWords();
+
+    // What the audio thread shows the message thread every block (Status.txt, the state, the editor).
+    struct EngineStatus
+    {
+        WalkState walk;                    // Walk's W, Orbit's step, the latched chord
+        Word current;                      // W as it stands (Orbit: its first 32 ops)
+        int currentOps = 0;                // how many ops W has in all
+        uint64_t keyGuess = 0;             // KeyGuess::pack()
+        int keyTonic = -1;                 // the key in force (KeyRef), -1 = none
+        bool keyMinor = false;
+    };
+
+    // A restored W and latched chord for the audio thread.
+    struct WalkRestore
+    {
+        uint32_t seq = 0;
+        WalkState state;
+    };
 
     class TonnetzProcessor final : public juce::AudioProcessor,
                                    private juce::Timer
@@ -87,6 +121,16 @@ namespace tonnetz
         static juce::String slotName (int slot) { return juce::String::charToString ((juce::juce_wchar) ('A' + slot)); }
 
         //======================================================================
+        // The engine's state (PLAN.md §3.7: the current W and Latch's chord). Message thread (or
+        // whichever thread asks for the state: locked).
+
+        // What the audio thread last published, or a restore it hasn't taken yet.
+        WalkState getWalkState() const;
+        // Hands W, Orbit's step and the latched chord to the audio thread.
+        void setWalkState (const WalkState&);
+        EngineStatus getEngineStatus() const;
+
+        //======================================================================
         // The test rig (PLAN.md §7.3). Message thread.
 
         // ~/Music/TonnetzML/TestRig: Keys.txt is read from it, Status.txt written to it.
@@ -98,9 +142,13 @@ namespace tonnetz
         // and writes Status.txt if what it says changed. Public so tests needn't run a message loop.
         void pollTestRig();
 
+        // Also on the timer: Key going from Listen to Hold puts the guess into keyTonic and
+        // keyMinor (PLAN.md §3.6). Public for the same reason.
+        void followKeyMode();
+
     private:
         static BusesProperties makeBuses();
-        void timerCallback() override { pollTestRig(); }
+        void timerCallback() override { followKeyMode(); pollTestRig(); }
         void run (juce::AudioBuffer<float>&, juce::MidiBuffer&, bool bypassed);
         Transport readTransport();
 
@@ -122,6 +170,19 @@ namespace tonnetz
         std::atomic<float>* registerParam = nullptr;
         std::atomic<float>* bassParam = nullptr;
         std::atomic<float>* octaveParam = nullptr;
+        std::atomic<float>* modeParam = nullptr;
+        std::atomic<float>* latchParam = nullptr;
+        std::atomic<float>* walkInputParam = nullptr;
+        std::atomic<float>* orbitCycleParam = nullptr;
+        std::atomic<float>* orbitRateParam = nullptr;
+        std::atomic<float>* opZoneStartParam = nullptr;
+        std::atomic<float>* opZoneOnParam = nullptr;
+        std::atomic<float>* keyParam = nullptr;
+        std::atomic<float>* keyTonicParam = nullptr;
+        std::atomic<float>* keyMinorParam = nullptr;
+        std::atomic<float>* inKeyParam = nullptr;
+        uint32_t restoredSeq = 0;           // audio thread: the last WalkRestore taken
+        EngineStatus status;                // audio thread: filled every block
         Transport lastTransport;
         std::atomic<bool> resetRequested { false };
         std::atomic<double> preparedSampleRate { 44100.0 };
@@ -129,6 +190,15 @@ namespace tonnetz
         // Message thread → audio thread.
         SnapshotExchange<RigKeys> rigKeysForAudio;
         SnapshotExchange<SlotWords> slotWordsForAudio;
+        SnapshotExchange<WalkRestore> walkForAudio;
+        std::atomic<uint32_t> walkTaken { 0 };     // the last WalkRestore the audio thread took
+
+        // Audio thread → message thread.
+        mutable SnapshotExchange<EngineStatus> statusForMessage;
+        mutable juce::CriticalSection statusLock;  // one reader at a time
+        mutable EngineStatus lastStatus;
+        WalkRestore pendingWalk;                    // the last restore handed over (statusLock)
+        int lastKeyMode = -1;                       // followKeyMode
 
         // Audio thread → message thread, for Status.txt.
         std::atomic<bool> statPlaying { false };

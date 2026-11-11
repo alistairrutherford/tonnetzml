@@ -1,5 +1,6 @@
-// Fuzz (PLAN.md §7.1 test_edge): random blocks of notes, controllers and parameter changes,
-// loops, locates, stops, Enable flips and releaseAll (bypass, reset), under hosts with random block sizes and
+// Fuzz (PLAN.md §7.1 test_edge): random blocks of notes, operator keys, controllers and parameter
+// changes (every mode, latch, Orbit's cycle and rate, the key settings, the zone), loops, locates,
+// stops, Enable flips, releaseAll (bypass, reset) and state restores, under hosts with random block sizes and
 // sample rates. Every run must keep the output clean (no double note-on, stray note-off or event
 // outside its block), leave nothing sounding once the keys are up and the transport stops, and
 // never allocate inside the engine (libmalloc's logger hook counts every allocation made while
@@ -46,8 +47,17 @@ namespace
 
     void randomSettings (std::mt19937& rng, EngineSettings& s)
     {
-        switch (rng() % 10)
+        switch (rng() % 19)
         {
+            case 10: s.mode = (Mode) (rng() % 4); break;
+            case 11: s.latch = (rng() % 2) != 0; break;
+            case 12: s.walkInput = (WalkInput) (rng() % 2); break;
+            case 13: s.orbitCycle = (OrbitCycle) (rng() % 5); break;
+            case 14: s.orbitRate = (int) (rng() % numOrbitRates); break;
+            case 15: s.key = (KeyMode) (rng() % 3); break;
+            case 16: s.keyTonic = (int) (rng() % 12); s.keyMinor = (rng() % 2) != 0; break;
+            case 17: s.inKey = (rng() % 2) != 0; break;
+            case 18: s.zone.on = true; s.zone.start = 24 + (int) (rng() % 4) * 12; break;
             case 0: s.word = randomWord (rng); break;
             case 1: s.mix = (Mix) (rng() % 3); break;
             case 2: s.sourceChannel = (int) (rng() % 16); break;
@@ -66,7 +76,8 @@ namespace
         std::unique_ptr<LatticeEngine> engine = std::make_unique<LatticeEngine>();
         EngineSettings s;
         Host h;
-        bool releaseNext = false;
+        bool releaseNext = false, restoreNext = false;
+        WalkState restoreTo;
         bool trace = std::getenv ("TONNETZ_TRACE") != nullptr;
         std::vector<std::pair<int64_t, MidiEvent>> traced;
         int64_t maxOut = 0;
@@ -82,6 +93,11 @@ namespace
                 {
                     engine->releaseAll (0, out);
                     releaseNext = false;
+                }
+                if (restoreNext)
+                {
+                    engine->restore (restoreTo, out);
+                    restoreNext = false;
                 }
                 engine->process (t, in, n, len, s, out);
                 watching = false;
@@ -105,6 +121,10 @@ namespace
             const double rates[] = { 8000.0, 22050.0, 44100.0, 48000.0, 96000.0, 192000.0 };
             Fuzz f (rates[rng() % 6], 40.0 + (double) (rng() % 200));
             for (int i = 0; i < 3; ++i) randomSettings (rng, f.s);
+            f.restoreTo.word = randomWord (rng);
+            f.restoreTo.orbitStep = rng() % 100;
+            for (int k = 0, n = (int) (rng() % 6); k < n; ++k)
+                f.restoreTo.latched[(size_t) (rng() % 128)] = (uint8_t) (1 + rng() % 127);
             if (rng() % 3 == 0)
             {
                 f.h.looping = true;
@@ -145,6 +165,21 @@ namespace
                 else if (r == 5) f.h.playing = ! f.h.playing;
                 else if (r == 6) f.releaseNext = true;
                 else if (r == 7) f.h.ppq = (double) (rng() % 64);   // a locate
+                else if (r == 8) f.restoreNext = true;               // a state restore (W, Orbit's step, a latched chord)
+                else if (r == 9)
+                {
+                    // A burst of operator keys (wherever the zone is).
+                    for (int k = 0; k < 6; ++k)
+                    {
+                        const int64_t at = f.h.pos + (int64_t) (rng() % 4096);
+                        const int key = std::min (127, f.s.zone.start + (int) (rng() % 12));
+                        if (at + 200 >= span)
+                            continue;
+                        f.h.input.push_back ({ at, MidiEvent::noteOn (0, key, 100, 0) });
+                        f.h.input.push_back ({ at + 1 + (int64_t) (rng() % 200), MidiEvent::noteOff (0, key, 0) });
+                    }
+                    std::stable_sort (f.h.input.begin() + (long) f.h.nextInput, f.h.input.end(), [] (const auto& a, const auto& b) { return a.first < b.first; });
+                }
             }
 
             // Every key up on every channel, Enable on, then the transport stops.
