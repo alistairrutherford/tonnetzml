@@ -182,6 +182,10 @@ namespace tonnetz::ui
         juce::String sentence;
     };
 
+    // The settings panel (after 1.0.1): the parameters the header and word bar don't show, as a
+    // panel of its own docked to the right of the lattice, between the header and the capture
+    // strip. A title line ("settings", reset, the fold ›), then one line per group: a caption on
+    // the left, its controls after it. Folded, it is a slim edge with ‹ to open it again.
     class Settings final : public juce::Component
     {
     public:
@@ -189,12 +193,15 @@ namespace tonnetz::ui
         void refresh();
         void paint (juce::Graphics&) override;
         void resized() override;
-        // The column's size for its contents, in at most `maxHeight` (its rows shrink to fit).
-        juce::Rectangle<int> preferredSize (int maxHeight = 10000) const;
-        HudButton& resetButton() noexcept { return reset; }
+        // The panel's width for its contents (folded: the slim edge).
+        int preferredWidth() const;
         void controls (juce::Array<HudControl*>& out);
-        // The Info View's key for a point on the column itself (a caption, a gap, the fold).
+        // The Info View's key for a point on the panel itself (a caption, a gap, the title).
         juce::String infoKeyAt (juce::Point<int>) const;
+        HudButton& resetButton() noexcept { return reset; }
+        HudButton& foldButton() noexcept { return fold; }
+
+        static constexpr int foldedWidth = 26;
 
     private:
         struct Line
@@ -208,6 +215,7 @@ namespace tonnetz::ui
         juce::Array<Line> lines;
         HudButton fold, reset;
         int rowHeight() const;
-        static constexpr int maxRow = 22, minRow = 18, captionWidth = 70;
+        juce::Rectangle<int> content() const { return getLocalBounds().withTrimmedLeft (1).reduced (12, 8); }
+        static constexpr int maxRow = 24, minRow = 18, captionWidth = 66, gap = 10;
     };
 }

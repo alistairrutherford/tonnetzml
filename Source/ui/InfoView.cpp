@@ -29,9 +29,9 @@ namespace tonnetz::ui
               "Right- or \xe2\x8c\x98-drag pans, the wheel zooms, double-click recentres." },
             { "ui.follow", "Follow", "On: the view eases to keep the chord played and the chord made in sight." },
             { "ui.latticeRelease", "Release", "Lets go of the triangle or set the lattice holds (Sticky)." },
-            { "ui.settings", "Settings", "Shows or folds this column of the other settings." },
+            { "ui.settings", "Settings", "Folds this panel to a slim edge (\xe2\x80\xba), or opens it again (\xe2\x80\xb9), giving the lattice the room." },
             { "ui.resetSettings", "Reset settings",
-              "Puts every setting in this column back to its default. Click, then click \"sure?\" within 3 seconds. "
+              "Puts every setting in this panel back to its default. Click, then click \"sure?\" within 3 seconds. "
               "Mode, Key, the slots' words and the capture stay." },
 
             // ---- The settings column ----------------------------------------------------------

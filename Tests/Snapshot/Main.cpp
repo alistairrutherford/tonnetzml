@@ -2073,19 +2073,38 @@ namespace
         listed.sort (false);
         check (inColumn == listed, "Reset settings covers exactly the settings column (" + inColumn.joinIntoString (" ") + ")");
 
-        // Both buttons fit at the smallest size and the column stays above the word bar.
+        // Both buttons fit at the smallest size; the panel is docked right of the lattice, from
+        // the header to the capture strip, and folds to a slim edge.
         for (const auto& size : { std::make_pair (760, 520), std::make_pair (1400, 900) })
         {
             ed.setSize (size.first, size.second);
             ed.refreshNow();
             const auto rs = ed.getLocalArea (&resetSettings, resetSettings.getLocalBounds());
             const auto rc = ed.getLocalArea (&resetCapture, resetCapture.getLocalBounds());
-            const auto column = ed.settings().getBounds();
+            const auto panel = ed.settings().getBounds();
+            const auto lat = ed.latticeView().getBounds();
             const auto bar = ed.wordBar().getBounds();
             check (ed.getLocalBounds().contains (rs) && ed.getLocalBounds().contains (rc) && rs.getWidth() >= resetSettings.preferredWidth() - 1
-                       && rc.getWidth() >= resetCapture.preferredWidth() - 1 && column.getBottom() <= bar.getY() + 4,
-                   juce::String (size.first) + " x " + juce::String (size.second) + ": both reset buttons fit, the settings column ends above the word bar ("
-                       + juce::String (column.getBottom()) + " / " + juce::String (bar.getY()) + ")");
+                       && rc.getWidth() >= resetCapture.preferredWidth() - 1,
+                   juce::String (size.first) + " x " + juce::String (size.second) + ": both reset buttons fit");
+            check (panel.getRight() == ed.getWidth() && panel.getX() == lat.getRight() && panel.getY() == lat.getY() && panel.getBottom() == lat.getBottom()
+                       && panel.getBottom() == ed.captureStrip().getY() && ! panel.intersects (bar) && bar.getRight() <= lat.getRight(),
+                   "the settings panel is docked right of the lattice, header to capture strip, clear of the word bar ("
+                       + panel.toString() + ", lattice " + lat.toString() + ")");
+            auto& view = h.p->editorView();
+            view.showSettings = false;
+            ed.settings().refresh();
+            ed.refreshNow();
+            const auto folded = ed.settings().getBounds();
+            check (folded.getWidth() == ui::Settings::foldedWidth && ed.latticeView().getRight() == folded.getX() && ! resetSettings.isVisible()
+                       && ed.settings().foldButton().isVisible(),
+                   "folded: a slim edge with its fold button, the lattice takes the room (" + folded.toString() + ")");
+            if (size.first == 760)
+                compareImage (editorImage (ed, 760, 520), "settings_folded_paper_760x520", fixtures, output);
+            view.showSettings = true;
+            ed.settings().refresh();
+            ed.refreshNow();
+            check (ed.settings().getWidth() == panel.getWidth(), "unfolded again at its width");
         }
     }
 

@@ -4,11 +4,15 @@
 
 ### Added
 
+- **Settings panel:** the settings that used to float over the lattice's top-right corner are now
+  a panel of their own, docked to the right of the lattice from the header down to the capture
+  strip: a *settings* title line with *reset* and a fold button (›), then one line per group with
+  its caption on the left. Fold it (›) to a slim edge to give the lattice the room; ‹ opens it
+  again (saved with the set, as before). The lattice and its word bar now end where the panel begins.
 - **Reset capture:** a *reset* button at the right of the capture strip forgets the chords captured,
   the take included. An armed take carries on, empty; notes still sounding stay in the capture from
   the reset. Dimmed while nothing is captured.
-- **Reset settings:** a *reset* button on the settings column's top line ("reset  settings ▴")
-  puts the column's 18 settings back to their defaults (Out, the channels, voicing, gather, Orbit,
+- **Reset settings:** a *reset* button on the settings panel's title line puts the panel's 18 settings back to their defaults (Out, the channels, voicing, gather, Orbit,
   Walk, latch, the operator keys, the held key, In key, Preview tone, the test rig). Mode, Key, Slot,
   Enable, the capture toggles, the slots' words and `W` are left alone.
 - Both reset buttons ask first: a click shows *sure?* in vermilion, and a second click within 3
@@ -18,9 +22,8 @@
 
 - **Bigger, clearer labels:** the settings column, the header's controls, the word bar, the
   capture strip, the keyboard strip and the lattice's hints are about 1.5 points larger, and the
-  faint caption ink is darker in both themes. The settings column's rows shrink (to 18 px) to stay
-  above the word bar in a small window; the capture strip and the keyboard strip's bar are a few
-  pixels taller, so the lattice gives up 10 px.
+  faint caption ink is darker in both themes. The capture strip and the keyboard strip's bar are a
+  few pixels taller, so the lattice gives up 10 px.
 
 ### Fixed
 

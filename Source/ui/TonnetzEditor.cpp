@@ -11,7 +11,7 @@ namespace tonnetz
           strip (p, picture, lattice, notes),
           word (p, picture),
           head (p, picture, [this] { setDark (! processor.editorView().dark); }),
-          side (p, [this] { if (constructed) layoutFloating(); }),
+          side (p, [this] { if (constructed) resized(); }),
           info (p.editorView().dark)
     {
         setOpaque (true);
@@ -142,7 +142,7 @@ namespace tonnetz
         {
             seenViewRestores = processor.editorViewRestores();
             lattice.viewRestored();
-            layoutFloating();
+            resized();
             themeChanged();
         }
         // The capture (Phase 5): taken from the audio thread here too, so the strip keeps up.
@@ -169,9 +169,6 @@ namespace tonnetz
     void TonnetzEditor::layoutFloating()
     {
         const auto lat = lattice.getBounds();
-        // The column stops above the word bar (its rows shrink to fit a small window).
-        const auto pref = side.preferredSize (lat.getHeight() - 8 - 22 - word.preferredHeight());
-        side.setBounds (lat.getRight() - pref.getWidth() - 4, lat.getY() + 4, pref.getWidth(), pref.getHeight());
         word.setBounds (lat.getX(), lat.getBottom() - 22 - word.preferredHeight(), lat.getWidth(), word.preferredHeight());
     }
 
@@ -183,6 +180,8 @@ namespace tonnetz
         const int keysHeight = ui::KeyboardStrip::barHeight + juce::jlimit (56, 96, getHeight() / 9);
         keyboard.setBounds (r.removeFromBottom (keysHeight));
         strip.setBounds (r.removeFromBottom (ui::CaptureStrip::stripHeight));
+        // The settings panel to the right of the lattice; the lattice takes the rest.
+        side.setBounds (r.removeFromRight (juce::jmin (side.preferredWidth(), r.getWidth() / 2)));
         lattice.setBounds (r);
         layoutFloating();
     }

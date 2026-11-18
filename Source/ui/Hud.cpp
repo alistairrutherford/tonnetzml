@@ -536,7 +536,7 @@ namespace tonnetz::ui
               refresh();
               if (layoutChanged)
                   layoutChanged();
-          }, 13.0f),
+          }, 19.0f),
           reset (p.editorView(), "reset", [this] { processor.resetSettings(); refresh(); }, 13.0f)
     {
         const auto& v = p.editorView();
@@ -565,25 +565,27 @@ namespace tonnetz::ui
         // Reset settings: on the fold's line, so it reads "reset  settings ▴".
         reset.setComponentID ("ui.resetSettings");
         reset.setConfirm ("sure?");
-        reset.setTooltip ("Reset settings: every setting in this column back to its default (click again to confirm).");
+        reset.setTooltip ("Reset settings: every setting in this panel back to its default (click again to confirm).");
         addAndMakeVisible (reset);
         refresh();
     }
 
     int Settings::rowHeight() const
     {
-        if (! processor.editorView().showSettings)
-            return maxRow;
-        return juce::jlimit (minRow, maxRow, (getHeight() - 8) / (lines.size() + 1));
+        // Title line + one per group, in the panel's height (a small window squeezes them).
+        return juce::jlimit (minRow, maxRow, content().getHeight() / (lines.size() + 1));
     }
 
     juce::String Settings::infoKeyAt (juce::Point<int> p) const
     {
-        // A line's caption and the gaps between its items stand for its first item.
-        auto r = getLocalBounds().reduced (8, 4);
+        // A line's caption and the gaps between its items stand for its first item; the title
+        // line for the fold.
+        if (! processor.editorView().showSettings)
+            return fold.getComponentID();
+        const auto r = content();
         const int row = rowHeight();
-        if (p.y < r.getY() + row || ! processor.editorView().showSettings)
-            return p.x < fold.getX() - 4 && p.x >= reset.getX() - 4 ? reset.getComponentID() : fold.getComponentID();
+        if (p.y < r.getY() + row)
+            return fold.getComponentID();
         const int line = (p.y - r.getY()) / row - 1;
         if (line >= 0 && line < lines.size() && ! lines.getReference (line).items.isEmpty())
             return lines.getReference (line).items.getFirst()->getComponentID();
@@ -596,27 +598,26 @@ namespace tonnetz::ui
             out.add (c);
     }
 
-    juce::Rectangle<int> Settings::preferredSize (int maxHeight) const
+    int Settings::preferredWidth() const
     {
-        const int top = fold.preferredWidth() + 8 + reset.preferredWidth();
         if (! processor.editorView().showSettings)
-            return { 0, 0, top + 16, maxRow + 8 };
-        int w = top;
+            return foldedWidth;
+        int w = captionWidth + reset.preferredWidth() + gap + fold.preferredWidth();
         for (const auto& line : lines)
         {
             int lw = captionWidth;
             for (auto* c : line.items)
-                lw += c->preferredWidth() + 10;
-            w = juce::jmax (w, lw);
+                lw += c->preferredWidth() + gap;
+            w = juce::jmax (w, lw - gap);
         }
-        const int row = juce::jlimit (minRow, maxRow, (maxHeight - 8) / (lines.size() + 1));
-        return { 0, 0, w + 16, row * (lines.size() + 1) + 8 };
+        return w + 25;
     }
 
     void Settings::refresh()
     {
         const bool shown = processor.editorView().showSettings;
-        fold.setText (shown ? utf8 ("settings \xe2\x96\xb4") : utf8 ("settings \xe2\x96\xbe"));
+        fold.setText (shown ? utf8 ("\xe2\x80\xba") : utf8 ("\xe2\x80\xb9"));   // › ‹ (fold to the right / open)
+        reset.setVisible (shown);
         bool widthChanged = false;
         for (const auto& line : lines)
             for (auto* c : line.items)
@@ -625,26 +626,33 @@ namespace tonnetz::ui
                 c->refresh();
                 widthChanged = widthChanged || (shown && std::abs (c->getWidth() - c->preferredWidth()) > 0);
             }
+        widthChanged = widthChanged || getWidth() != preferredWidth();
         if (widthChanged && layoutChanged)
             layoutChanged();
     }
 
     void Settings::resized()
     {
-        auto r = getLocalBounds().reduced (8, 4);
+        auto r = content();
+        if (! processor.editorView().showSettings)
+        {
+            fold.setBounds (getLocalBounds().withTrimmedLeft (1).removeFromTop (r.getY() + maxRow).withTrimmedTop (r.getY()));
+            repaint();
+            return;
+        }
         const int h = rowHeight();
         auto top = r.removeFromTop (h);
         fold.setBounds (top.removeFromRight (fold.preferredWidth()));
-        top.removeFromRight (8);
+        top.removeFromRight (gap);
         reset.setBounds (top.removeFromRight (reset.preferredWidth()));
         for (const auto& line : lines)
         {
             auto row = r.removeFromTop (h);
-            for (int i = line.items.size(); --i >= 0;)
+            row.removeFromLeft (captionWidth);
+            for (auto* c : line.items)
             {
-                auto* c = line.items[i];
-                c->setBounds (row.removeFromRight (c->preferredWidth()));
-                row.removeFromRight (10);
+                c->setBounds (row.removeFromLeft (c->preferredWidth()));
+                row.removeFromLeft (gap);
             }
         }
         repaint();
@@ -653,24 +661,21 @@ namespace tonnetz::ui
     void Settings::paint (juce::Graphics& g)
     {
         const auto& k = Ink::of (processor.editorView().dark);
+        // Its own page: a shade off the ground, with one ink rule down its left edge.
+        g.setColour (k.ground.interpolatedWith (k.groundEdge, 0.45f));
+        g.fillRect (getLocalBounds());
+        g.setColour (k.line.withAlpha (0.8f));
+        g.fillRect (0.0f, 0.0f, 1.0f, (float) getHeight());
         if (! processor.editorView().showSettings)
             return;
-        // A soft wash behind the text so it reads over the lines (no border: not a panel).
-        juce::ColourGradient wash (k.ground.withAlpha (0.0f), 0.0f, 0.0f, k.wash, 40.0f, 0.0f, false);
-        g.setGradientFill (wash);
-        g.fillRoundedRectangle (getLocalBounds().toFloat(), 10.0f);
+        auto r = content();
+        const int h = rowHeight();
+        g.setColour (k.text);
+        g.setFont (Ink::ui (13.0f, true));
+        g.drawText ("settings", r.removeFromTop (h), juce::Justification::centredLeft, false);
         g.setFont (Ink::ui (13.0f));
         g.setColour (k.textFaint);
-        auto r = getLocalBounds().reduced (8, 4);
-        const int h = rowHeight();
-        r.removeFromTop (h);
         for (const auto& line : lines)
-        {
-            auto row = r.removeFromTop (h);
-            int left = row.getRight();
-            for (auto* c : line.items)
-                left = juce::jmin (left, c->getX());
-            g.drawText (line.caption, juce::Rectangle<int> (left - captionWidth - 4, row.getY(), captionWidth, row.getHeight()), juce::Justification::centredRight, false);
-        }
+            g.drawText (line.caption, r.removeFromTop (h).withWidth (captionWidth - 6), juce::Justification::centredLeft, false);
     }
 }

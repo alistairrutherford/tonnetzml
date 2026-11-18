@@ -66,9 +66,10 @@ hovering a ghost neighbour auditions it.
   on, empty).
 - **The keyboard strip** shows both inks and the operator zone; click to play (*sticky* holds keys
   until clicked again), or use the computer keyboard (Z… and Q… rows, ‹ › for the octave).
-- **The settings column** (top right): the other settings as click-to-cycle labels; **settings ▴**
-  folds it, and **reset** beside it puts every setting in the column back to its default (Mode, Key,
-  Slot and the slots' words stay). Both resets ask first: click, then click *sure?* within 3 seconds.
+- **The settings panel**, docked to the right of the lattice: the other settings as click-to-cycle
+  labels, a group to a line. **›** folds it to a slim edge (**‹** opens it), and **reset** puts every
+  setting in it back to its default (Mode, Key, Slot and the slots' words stay). Both resets ask
+  first: click, then click *sure?* within 3 seconds.
 - **The Info View** along the bottom: point at any control, button or part of the window and it
   says what it does and what its settings mean, like Live's own Info View.
 
