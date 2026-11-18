@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Info View:** a strip along the bottom of the editor, under the keyboard, like Live's own Info
+  View. Point at any control, button or part of the window (the lattice, the word bar, the capture
+  strip, the keyboard) and it shows what it does and what its settings mean; elsewhere, a short
+  hint. Drawn in the editor's own ink, in both themes. The smallest window is still 760 × 520; the
+  lattice gives up 42 px to make room.
+- The README's screenshot shows the editor with the Info View.
+
 ## 1.0.0 (2026-11-11)
 
 The first release. TonnetzML is a VST3 and Standalone MIDI plug-in for macOS that places the chord
