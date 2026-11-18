@@ -32,6 +32,10 @@ namespace tonnetz::ui
           octaveUp (p.editorView(), utf8 ("\xe2\x80\xba"), [this] { auto& v = processor.editorView(); v.computerOctave = juce::jmin (8, v.computerOctave + 1); refresh(); }, 13.0f)
     {
         setOpaque (true);
+        sticky.setComponentID ("ui.sticky");
+        release.setComponentID ("ui.keysRelease");
+        octaveDown.setComponentID ("ui.octave");
+        octaveUp.setComponentID ("ui.octave");
         for (auto* b : { &sticky, &release, &octaveDown, &octaveUp })
             addAndMakeVisible (b);
         refresh();

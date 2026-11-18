@@ -65,6 +65,8 @@ hovering a ghost neighbour auditions it.
   the sixteenth grid); **save…** writes one.
 - **The keyboard strip** shows both inks and the operator zone; click to play (*sticky* holds keys
   until clicked again), or use the computer keyboard (Z… and Q… rows, ‹ › for the octave).
+- **The Info View** along the bottom: point at any control, button or part of the window and it
+  says what it does and what its settings mean, like Live's own Info View.
 
 Saved with the set: every parameter, the eight slot words, the current `W` (and Orbit's step), the
 latched chord, and the editor's view (camera, zoom, theme, Follow, Sticky, the settings column,

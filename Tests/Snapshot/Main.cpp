@@ -57,6 +57,10 @@
 //               the lattice (clicks on the generated chord's edges and nodes) and Shrink from
 //               the palette edit W; the editor's view (camera, zoom, theme, Follow, Sticky…)
 //               saved and restored, into a new instance and into an open editor
+//  17. info     the Info View along the bottom (hover help, as in NoteCap): every parameter,
+//               button and area has a short entry and can be pointed at (760 x 520 and
+//               1400 x 900); the strip itself isn't an area; a mouse move over a control shows
+//               it, leaving the editor shows the hint; a reference image
 //
 //   TonnetzMLSnapshot <fixtures dir> <output dir> [--update | --no-pixels]
 //
@@ -1962,6 +1966,81 @@ namespace
             check (f.editorView().zoom == 2.0, "a state from before Phase 6 (no VIEW) leaves the view as it was");
         }
     }
+
+    // The Info View (hover help along the bottom, as in NoteCap and Live).
+    void testInfoView (const juce::File& fixtures, const juce::File& output)
+    {
+        std::cout << "info view" << std::endl;
+        TonnetzProcessor p;
+        std::unique_ptr<juce::AudioProcessorEditor> e (p.createEditor());
+        auto& ed = editorOf (e);
+        ed.freezeAnimation (true);
+
+        // Every parameter has a short entry, and so does everything else in the table.
+        juce::StringArray missing, tooLong;
+        for (auto* param : p.getParameters())
+            if (auto* ranged = dynamic_cast<juce::RangedAudioParameter*> (param))
+                if (ui::InfoView::titleFor (ranged->getParameterID()).isEmpty() || ui::InfoView::textFor (ranged->getParameterID()).isEmpty())
+                    missing.add (ranged->getParameterID());
+        for (const auto& key : ui::InfoView::keys())
+            if (ui::InfoView::textFor (key).length() > 200 || ui::InfoView::titleFor (key).length() > 24)
+                tooLong.add (key);
+        check (missing.isEmpty(), "every parameter has an Info View entry " + missing.joinIntoString (" "));
+        check (tooLong.isEmpty() && ui::InfoView::keys().size() >= 40,
+               "entries stay brief: titles of at most 24 characters, text of at most 200 (" + juce::String (ui::InfoView::keys().size())
+                   + " entries) " + tooLong.joinIntoString (" "));
+
+        // Everything in the table can be pointed at (the palette once it is open).
+        for (const auto& size : { std::make_pair (760, 520), std::make_pair (1400, 900) })
+        {
+            ed.setSize (size.first, size.second);
+            ed.refreshNow();
+            juce::StringArray found;
+            const auto scan = [&]
+            {
+                for (int y = 0; y < ed.getHeight(); y += 2)
+                    for (int x = 0; x < ed.getWidth(); x += 2)
+                        found.addIfNotAlreadyThere (ed.infoKeyAt ({ x, y }));
+            };
+            scan();
+            ed.wordBar().openPalette();
+            scan();
+            if (auto* pal = ed.wordBar().palette())
+                pal->setVisible (false);
+            juce::StringArray unreachable;
+            for (const auto& key : ui::InfoView::keys())
+                if (! found.contains (key))
+                    unreachable.add (key);
+            check (unreachable.isEmpty(), juce::String (size.first) + " x " + juce::String (size.second) + ": everything described can be pointed at ("
+                   + juce::String (found.size() - 1) + " keys) " + unreachable.joinIntoString (" "));
+
+            const auto strip = ed.infoView().getBounds();
+            check (strip.getBottom() == ed.getHeight() && strip.getWidth() == ed.getWidth() && strip.getHeight() == ui::InfoView::stripHeight
+                       && ed.keyboardStrip().getBottom() == strip.getY(),
+                   "the strip spans the bottom of the window, under the keyboard");
+            check (ed.infoKeyAt (strip.getCentre()).isEmpty(), "the strip itself isn't something to point at");
+        }
+
+        // A mouse move over a control shows it; leaving the editor shows the hint.
+        ed.setSize (760, 520);
+        auto* mix = ed.controlFor (params::mix);
+        ed.mouseMove (mouseAt (*mix, mix->getLocalBounds().getCentre().toFloat()));
+        check (ed.infoView().shownKey() == "mix" && ed.infoView().shownTitle() == "Out", "pointing at the Out control shows Out (" + ed.infoView().shownTitle() + ")");
+        auto& lat = ed.latticeView();
+        ed.mouseMove (mouseAt (lat, { 40.0f, (float) lat.getHeight() * 0.5f }));
+        check (ed.infoView().shownKey() == "area.lattice", "pointing at the lattice shows the lattice's entry (" + ed.infoView().shownKey() + ")");
+        ed.mouseExit (mouseAt (ed, { -5.0f, -5.0f }));
+        check (ed.infoView().shownKey().isEmpty() && ed.infoView().shownText() == ui::InfoView::hint(), "leaving the editor shows the hint");
+
+        // Reference images: the longest entry at the smallest size (two lines), and the hint in
+        // the dark.
+        ed.showInfoFor ("area.lattice");
+        compareImage (editorImage (ed, 760, 520), "info_view_lattice_paper_760x520", fixtures, output);
+        ed.setDark (true);
+        ed.showInfoFor ({});
+        compareImage (editorImage (ed, 1200, 800), "info_view_hint_dark_1200x800", fixtures, output);
+        ed.setDark (false);
+    }
 }
 
 int main (int argc, char* argv[])
@@ -1990,6 +2069,7 @@ int main (int argc, char* argv[])
     testEditorRealtime();
     testCapture (fixtures, output);
     testFinish (fixtures, output);
+    testInfoView (fixtures, output);
     testThrough();
     testRig (output);
     testParams();

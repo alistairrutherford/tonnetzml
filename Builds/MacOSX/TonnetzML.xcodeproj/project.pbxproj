@@ -62,6 +62,7 @@
 		ABA60D3C40C70100F0384816 /* CoreAudioKit.framework */ = {isa = PBXBuildFile; fileRef = 5E5E2373A60A25AEB22FC735; };
 		B24ACFF61068463A9D61D8A4 /* include_juce_graphics_Sheenbidi.c */ = {isa = PBXBuildFile; fileRef = AB7B19D68741102D36EAB80D; };
 		B4684F921BEC58FE1941D8D2 /* include_juce_gui_basics_5.cpp */ = {isa = PBXBuildFile; fileRef = 3FB59F02E22B3A1DBE95EA7E; };
+		B73DC09E864B5A269ED53CA4 /* InfoView.cpp */ = {isa = PBXBuildFile; fileRef = 3E45037C9D289D1173473638; };
 		BED3BD107A36B812009EFDA7 /* AudioToolbox.framework */ = {isa = PBXBuildFile; fileRef = 69E1232BF08EF98E6959A2A4; };
 		C3372F1DF66B7693B235B135 /* include_juce_audio_basics.mm */ = {isa = PBXBuildFile; fileRef = 2AD8F4BF100CD30977858BB9; };
 		C49C53B0AD468A7D59D36C92 /* include_juce_audio_plugin_client_ARA.cpp */ = {isa = PBXBuildFile; fileRef = 1CD3D183169100236E361BEC; };
@@ -106,6 +107,7 @@
 		3AE3FF6528D0F6600DF7516D /* LatticeModel.h */ /* LatticeModel.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = LatticeModel.h; path = ../../Source/ui/LatticeModel.h; sourceTree = SOURCE_ROOT; };
 		3C2FCFA9228A3703007C7297 /* TonnetzEditor.h */ /* TonnetzEditor.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = TonnetzEditor.h; path = ../../Source/ui/TonnetzEditor.h; sourceTree = SOURCE_ROOT; };
 		3E39C56A82EBB85B4511A18E /* TonnetzProcessor.h */ /* TonnetzProcessor.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = TonnetzProcessor.h; path = ../../Source/plugin/TonnetzProcessor.h; sourceTree = SOURCE_ROOT; };
+		3E45037C9D289D1173473638 /* InfoView.cpp */ /* InfoView.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = InfoView.cpp; path = ../../Source/ui/InfoView.cpp; sourceTree = SOURCE_ROOT; };
 		3F3B615C28066E7BAC64656B /* RomanNumeral.h */ /* RomanNumeral.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = RomanNumeral.h; path = ../../Source/core/theory/RomanNumeral.h; sourceTree = SOURCE_ROOT; };
 		3FB59F02E22B3A1DBE95EA7E /* include_juce_gui_basics_5.cpp */ /* include_juce_gui_basics_5.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = include_juce_gui_basics_5.cpp; path = ../../JuceLibraryCode/include_juce_gui_basics_5.cpp; sourceTree = SOURCE_ROOT; };
 		410A31541DF05FEED8E638B9 /* TonnetzEditor.cpp */ /* TonnetzEditor.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = TonnetzEditor.cpp; path = ../../Source/ui/TonnetzEditor.cpp; sourceTree = SOURCE_ROOT; };
@@ -188,6 +190,7 @@
 		F6085FD9A114B2A410B3B07D /* CaptureStrip.cpp */ /* CaptureStrip.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = CaptureStrip.cpp; path = ../../Source/ui/CaptureStrip.cpp; sourceTree = SOURCE_ROOT; };
 		F6A86EB7FB42301EE67794CC /* CoreMIDI.framework */ /* CoreMIDI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreMIDI.framework; path = System/Library/Frameworks/CoreMIDI.framework; sourceTree = SDKROOT; };
 		FA65D927CBAC3C57FF3E6F7B /* WordBar.cpp */ /* WordBar.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = WordBar.cpp; path = ../../Source/ui/WordBar.cpp; sourceTree = SOURCE_ROOT; };
+		FA9D7793C59526D3B3CC8D02 /* InfoView.h */ /* InfoView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = InfoView.h; path = ../../Source/ui/InfoView.h; sourceTree = SOURCE_ROOT; };
 		FB8347175DCCFF3E6213213D /* IOKit.framework */ /* IOKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = IOKit.framework; path = System/Library/Frameworks/IOKit.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
@@ -299,6 +302,8 @@
 				FA65D927CBAC3C57FF3E6F7B,
 				82C8909559A2FC0390103294,
 				F6085FD9A114B2A410B3B07D,
+				FA9D7793C59526D3B3CC8D02,
+				3E45037C9D289D1173473638,
 			);
 			name = ui;
 			sourceTree = "<group>";
@@ -810,6 +815,7 @@
 				EDBA0083BCD7F91E8581858B,
 				312FF7689885C0D551983482,
 				7FB051C2FEAE5F83612564A5,
+				B73DC09E864B5A269ED53CA4,
 				C3372F1DF66B7693B235B135,
 				8DF518F94AE2FA21192E9D59,
 				C82256E57EAEEA236A2BA6D2,

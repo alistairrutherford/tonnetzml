@@ -16,6 +16,7 @@
         <FILE id="snF006" name="KeyboardStrip.cpp" compile="1" resource="0" file="../../Source/ui/KeyboardStrip.cpp"/>
         <FILE id="snF007" name="WordBar.cpp" compile="1" resource="0" file="../../Source/ui/WordBar.cpp"/>
         <FILE id="snF008" name="CaptureStrip.cpp" compile="1" resource="0" file="../../Source/ui/CaptureStrip.cpp"/>
+        <FILE id="snF009" name="InfoView.cpp" compile="1" resource="0" file="../../Source/ui/InfoView.cpp"/>
     </GROUP>
   </MAINGROUP>
   <MODULES>

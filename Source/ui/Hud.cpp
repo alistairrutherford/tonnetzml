@@ -425,6 +425,7 @@ namespace tonnetz::ui
         addAndMakeVisible (key);
         addAndMakeVisible (theme);
         enable.setTooltip ("Enable: off passes MIDI through");
+        theme.setComponentID ("ui.theme");
         refresh();
     }
 
@@ -536,8 +537,21 @@ namespace tonnetz::ui
                                    add (new HudToggle (paramOf (P, params::inKey), v, {}, "in key")) } });
         lines.add ({ "sound", { add (new HudToggle (paramOf (P, params::previewTone), v, {}, "preview")) } });
         lines.add ({ "test", { add (new HudToggle (paramOf (P, params::testRig), v, {}, "rig")) } });
+        fold.setComponentID ("ui.settings");
         addAndMakeVisible (fold);
         refresh();
+    }
+
+    juce::String Settings::infoKeyAt (juce::Point<int> p) const
+    {
+        // A line's caption and the gaps between its items stand for its first item.
+        auto r = getLocalBounds().reduced (8, 4);
+        if (p.y < r.getY() + lineHeight || ! processor.editorView().showSettings)
+            return fold.getComponentID();
+        const int line = (p.y - r.getY()) / lineHeight - 1;
+        if (line >= 0 && line < lines.size() && ! lines.getReference (line).items.isEmpty())
+            return lines.getReference (line).items.getFirst()->getComponentID();
+        return {};
     }
 
     void Settings::controls (juce::Array<HudControl*>& out)

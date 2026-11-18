@@ -72,6 +72,8 @@
         <FILE id="tzF075" name="WordBar.cpp" compile="1" resource="0" file="Source/ui/WordBar.cpp"/>
         <FILE id="tzF076" name="CaptureStrip.h" compile="0" resource="0" file="Source/ui/CaptureStrip.h"/>
         <FILE id="tzF077" name="CaptureStrip.cpp" compile="1" resource="0" file="Source/ui/CaptureStrip.cpp"/>
+        <FILE id="tzF078" name="InfoView.h" compile="0" resource="0" file="Source/ui/InfoView.h"/>
+        <FILE id="tzF079" name="InfoView.cpp" compile="1" resource="0" file="Source/ui/InfoView.cpp"/>
       </GROUP>
     </GROUP>
   </MAINGROUP>

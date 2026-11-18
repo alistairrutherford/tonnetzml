@@ -11,7 +11,8 @@ namespace tonnetz
           strip (p, picture, lattice, notes),
           word (p, picture),
           head (p, picture, [this] { setDark (! processor.editorView().dark); }),
-          side (p, [this] { if (constructed) layoutFloating(); })
+          side (p, [this] { if (constructed) layoutFloating(); }),
+          info (p.editorView().dark)
     {
         setOpaque (true);
         setWantsKeyboardFocus (true);
@@ -21,6 +22,14 @@ namespace tonnetz
         addAndMakeVisible (word);
         addAndMakeVisible (head);
         addAndMakeVisible (side);
+        addAndMakeVisible (info);
+        // The Info View's areas (the controls and buttons carry their own keys).
+        lattice.setComponentID ("area.lattice");
+        keyboard.setComponentID ("area.keyboard");
+        strip.setComponentID ("area.capture");
+        word.setComponentID ("area.word");
+        head.setComponentID ("area.header");
+        addMouseListener (this, true);     // hovering over any child updates the Info View
         // Free ops from the lattice (Phase 6) go where the word bar's do.
         lattice.canEditWord = [this] { return word.editable(); };
         lattice.appendOp = [this] (const Op& op) { word.appendOp (op); };
@@ -61,6 +70,7 @@ namespace tonnetz
         word.refresh();
         keyboard.refresh();
         strip.repaint();
+        info.repaint();
         repaint();
         lattice.repaint();
     }
@@ -168,6 +178,7 @@ namespace tonnetz
     {
         auto r = getLocalBounds();
         head.setBounds (r.removeFromTop (headerHeight));
+        info.setBounds (r.removeFromBottom (ui::InfoView::stripHeight));
         const int keysHeight = ui::KeyboardStrip::barHeight + juce::jlimit (56, 96, getHeight() / 9);
         keyboard.setBounds (r.removeFromBottom (keysHeight));
         strip.setBounds (r.removeFromBottom (ui::CaptureStrip::stripHeight));
@@ -201,6 +212,45 @@ namespace tonnetz
             return true;
         }
         return keyboard.keyPressed (k);
+    }
+
+    juce::String TonnetzEditor::infoKeyAt (juce::Point<int> p)
+    {
+        // The innermost thing under the point with an entry: a control, a button, else its area.
+        // (From the children down: the editor's own getComponentAt needs it to be showing.)
+        juce::Component* hit = nullptr;
+        for (int i = getNumChildComponents(); --i >= 0 && hit == nullptr;)
+        {
+            auto* child = getChildComponent (i);
+            if (child->isVisible() && child->getBounds().contains (p))
+                hit = child->getComponentAt (child->getLocalPoint (this, p));
+        }
+        for (auto* c = hit; c != nullptr && c != this; c = c->getParentComponent())
+        {
+            if (c == &side)
+                return side.infoKeyAt (side.getLocalPoint (this, p));
+            if (ui::InfoView::has (c->getComponentID()))
+                return c->getComponentID();
+        }
+        return {};
+    }
+
+    void TonnetzEditor::updateInfo (const juce::MouseEvent& e)
+    {
+        const auto key = infoKeyAt (e.getEventRelativeTo (this).getPosition());
+        if (key != info.shownKey())
+            info.showKey (key);
+    }
+
+    void TonnetzEditor::mouseEnter (const juce::MouseEvent& e) { updateInfo (e); }
+    void TonnetzEditor::mouseMove (const juce::MouseEvent& e) { updateInfo (e); }
+    void TonnetzEditor::mouseDrag (const juce::MouseEvent& e) { updateInfo (e); }
+
+    void TonnetzEditor::mouseExit (const juce::MouseEvent& e)
+    {
+        // Moving between children also sends exits: clear only on leaving the editor.
+        if (! getLocalBounds().contains (e.getEventRelativeTo (this).getPosition()))
+            info.showKey ({});
     }
 
     bool TonnetzEditor::keyStateChanged (bool)

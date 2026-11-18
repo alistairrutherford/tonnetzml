@@ -28,6 +28,8 @@ namespace tonnetz::ui
           release (p.editorView(), "release", [this] { releaseLattice(); repaint(); }, 11.5f)
     {
         setOpaque (true);
+        follow.setComponentID ("ui.follow");
+        release.setComponentID ("ui.latticeRelease");
         addAndMakeVisible (follow);
         addAndMakeVisible (release);
         targetA = p.editorView().centreA;

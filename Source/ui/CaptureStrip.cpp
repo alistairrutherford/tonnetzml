@@ -58,6 +58,8 @@ namespace tonnetz::ui
     {
         captureToggle.setComponentID (params::capture);
         sourceToggle.setComponentID (params::captureSource);
+        handle.setComponentID ("ui.drag");
+        save.setComponentID ("ui.save");
         captureToggle.setTooltip ("Capture: arm a take. Everything played from now until it is disarmed is kept (the strip "
                                   "shows it); with it off the strip shows the last 64 bars, always kept.");
         sourceToggle.setTooltip ("Capture the source notes too (what was played into TonnetzML), on their own track.");

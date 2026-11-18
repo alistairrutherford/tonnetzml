@@ -113,6 +113,9 @@ namespace tonnetz::ui
         plus.setTooltip ("add an op");
         undoButton.setTooltip ("undo the last op");
         homeButton.setTooltip ("home: no ops");
+        plus.setComponentID ("ui.add");
+        undoButton.setComponentID ("ui.undo");
+        homeButton.setComponentID ("ui.home");
 
         text.setFont (Ink::ui (15.0f, true));
         text.setJustification (juce::Justification::centredLeft);
@@ -291,6 +294,7 @@ namespace tonnetz::ui
                 if (! juce::ModifierKeys::currentModifiers.isShiftDown())
                     paletteView->setVisible (false);
             });
+        paletteView->setComponentID ("area.palette");
         if (auto* parent = getParentComponent())
         {
             parent->addAndMakeVisible (*paletteView);

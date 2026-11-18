@@ -185,6 +185,8 @@ namespace tonnetz::ui
         // The column's size for its contents.
         juce::Rectangle<int> preferredSize() const;
         void controls (juce::Array<HudControl*>& out);
+        // The Info View's key for a point on the column itself (a caption, a gap, the fold).
+        juce::String infoKeyAt (juce::Point<int>) const;
 
     private:
         struct Line
