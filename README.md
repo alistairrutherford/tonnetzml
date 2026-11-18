@@ -6,7 +6,7 @@ as MIDI. The plan, with the theory, the design and the status of each phase, is 
 
 **Version 1.0.0** (2026-11-11). What's in it and the known limits: [CHANGELOG.md](CHANGELOG.md).
 
-![The editor: the lattice, the word bar, the capture strip and the keyboard](docs/phase5-capture-strip.png)
+![The editor in Walk: Cmaj7 (teal) through P·L to A♭maj7 (vermilion) in C major, with the word bar, the capture strip, the keyboard and the Info View along the bottom](docs/editor.png)
 
 ## What it does
 

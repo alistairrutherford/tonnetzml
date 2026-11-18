@@ -1061,6 +1061,12 @@ namespace
                    "the plan's sentence, spelled and numbered in C major: " + ed.model().sentence);
             check (classify (ed.model().source.shape).shape == Shape::Rhombus && classify (ed.model().generated.shape).shape == Shape::Rhombus,
                    "Cmaj7 and A\xe2\x99\xadmaj7 are rhombi");
+            // The README's screenshot (docs/editor.png is a copy): this scene, with the Info
+            // View showing the Mode entry.
+            ed.setDark (false);
+            ed.showInfoFor (params::mode);
+            compareImage (editorImage (ed, 1200, 800), "readme_walk_info_paper_1200x800", fixtures, output);
+            ed.showInfoFor ({});
         }
 
         // 3. Orbit LR on A minor: the cycle's loop through all 24 triads.
