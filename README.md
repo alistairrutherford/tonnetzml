@@ -62,9 +62,13 @@ hovering a ghost neighbour auditions it.
 - **The capture strip**: every chord played, as a glyph. **⦿ capture** arms a take (otherwise the
   last 64 bars are kept anyway); click a glyph to play that chord again; drag **⇩ drag MIDI** into a
   track or the Finder for a `.mid` (hold Alt for the *Chords* version, one block chord per change on
-  the sixteenth grid); **save…** writes one.
+  the sixteenth grid); **save…** writes one; **reset** forgets the capture (an armed take carries
+  on, empty).
 - **The keyboard strip** shows both inks and the operator zone; click to play (*sticky* holds keys
   until clicked again), or use the computer keyboard (Z… and Q… rows, ‹ › for the octave).
+- **The settings column** (top right): the other settings as click-to-cycle labels; **settings ▴**
+  folds it, and **reset** beside it puts every setting in the column back to its default (Mode, Key,
+  Slot and the slots' words stay). Both resets ask first: click, then click *sure?* within 3 seconds.
 - **The Info View** along the bottom: point at any control, button or part of the window and it
   says what it does and what its settings mean, like Live's own Info View.
 

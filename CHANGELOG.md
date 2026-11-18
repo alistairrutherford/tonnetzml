@@ -1,5 +1,31 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Reset capture:** a *reset* button at the right of the capture strip forgets the chords captured,
+  the take included. An armed take carries on, empty; notes still sounding stay in the capture from
+  the reset. Dimmed while nothing is captured.
+- **Reset settings:** a *reset* button on the settings column's top line ("reset  settings ▴")
+  puts the column's 18 settings back to their defaults (Out, the channels, voicing, gather, Orbit,
+  Walk, latch, the operator keys, the held key, In key, Preview tone, the test rig). Mode, Key, Slot,
+  Enable, the capture toggles, the slots' words and `W` are left alone.
+- Both reset buttons ask first: a click shows *sure?* in vermilion, and a second click within 3
+  seconds acts. Both have Info View entries.
+
+### Changed
+
+- **Bigger, clearer labels:** the settings column, the header's controls, the word bar, the
+  capture strip, the keyboard strip and the lattice's hints are about 1.5 points larger, and the
+  faint caption ink is darker in both themes. The settings column's rows shrink (to 18 px) to stay
+  above the word bar in a small window; the capture strip and the keyboard strip's bar are a few
+  pixels taller, so the lattice gives up 10 px.
+
+### Fixed
+
+- With an empty word, "none: the chord as played" was drawn over the word bar's ⌫ and ⌂ buttons.
+
 ## 1.0.1 (2026-11-18)
 
 ### Added

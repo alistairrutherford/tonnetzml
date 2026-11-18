@@ -169,7 +169,8 @@ namespace tonnetz
     void TonnetzEditor::layoutFloating()
     {
         const auto lat = lattice.getBounds();
-        const auto pref = side.preferredSize();
+        // The column stops above the word bar (its rows shrink to fit a small window).
+        const auto pref = side.preferredSize (lat.getHeight() - 8 - 22 - word.preferredHeight());
         side.setBounds (lat.getRight() - pref.getWidth() - 4, lat.getY() + 4, pref.getWidth(), pref.getHeight());
         word.setBounds (lat.getX(), lat.getBottom() - 22 - word.preferredHeight(), lat.getWidth(), word.preferredHeight());
     }

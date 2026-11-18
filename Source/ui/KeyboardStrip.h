@@ -16,7 +16,7 @@ namespace tonnetz::ui
     {
     public:
         static constexpr int lowest = 21, highest = 108;     // A0..C8
-        static constexpr int barHeight = 18;
+        static constexpr int barHeight = 22;
 
         KeyboardStrip (TonnetzProcessor&, const LatticeModel&, EditorNotes&);
 

@@ -13,6 +13,8 @@
 //              captured note still ends
 //   model      the last 64 bars (older notes go), the take (arming, notes sounding at the
 //              arming, cut at disarming, kept until the next arming), `current`
+//   reset      clear(): the capture goes, a sounding note stays from the reset, an armed
+//              take carries on empty, a finished take goes
 //   engine     the real LatticeEngine (Mirror P L, Walk with operator keys): the As played file
 //              equals what the engine sent, note for note, to the tick (G6 offline)
 //   renderings As played (exact) and Chords (a hand-spread chord is one chord; snapped to the
@@ -351,6 +353,51 @@ namespace
         c.block (100, { MidiEvent::noteOn (1, 48, 100, 0) });
         auto cur = c.model.current();
         check (cur.size() == 1 && cur[0].open && cur[0].end >= cur[0].start, "an open note in the take reaches to the present");
+    }
+
+    // Reset capture (CaptureModel::clear): everything captured goes; what sounds starts again
+    // at the reset and its note-off still lands; an armed take carries on, a finished one goes.
+    void testClear()
+    {
+        Cap c;
+        c.t.playing = true;
+        for (int bar = 0; bar < 4; ++bar)
+        {
+            c.block (100, { MidiEvent::noteOn (1, 60 + bar, 100, 0) });
+            c.block (95800);
+            c.block (100, { MidiEvent::noteOff (1, 60 + bar, 0) });
+        }
+        c.block (100, { MidiEvent::noteOn (1, 72, 100, 0) });
+        c.block (24000);
+        const auto before = c.model.revision();
+        const double resetAt = c.model.tapeNow();
+        c.model.clear();
+        auto r = c.model.retrospective();
+        check (c.model.revision() != before && r.size() == 1 && r[0].pitch == 72 && r[0].open && std::abs (r[0].start - resetAt) < 1.0e-9,
+               "reset: the last 64 bars go, a note still sounding stays, from the reset (" + std::to_string (r.size()) + " notes)");
+        c.block (24000, { MidiEvent::noteOff (1, 72, 12000) });
+        r = c.model.retrospective();
+        check (r.size() == 1 && ! r[0].open && r[0].end > r[0].start, "its note-off still ends it");
+
+        // Armed: the take carries on, empty from the reset.
+        c.s.capture = true;
+        c.block (100);
+        c.block (100, { MidiEvent::noteOn (1, 64, 90, 0), MidiEvent::noteOff (1, 64, 50) });
+        c.model.clear();
+        check (c.model.isArmed() && c.model.showingTake() && c.model.takeNotes().empty() && c.model.current().empty(),
+               "reset while armed: the take carries on, empty");
+        c.block (100, { MidiEvent::noteOn (1, 67, 90, 0), MidiEvent::noteOff (1, 67, 50) });
+        check (c.model.takeNotes().size() == 1 && c.model.takeNotes()[0].pitch == 67, "and what is played after it is in the take");
+
+        // A finished take goes: the strip shows the (empty) last 64 bars again.
+        c.s.capture = false;
+        c.block (100);
+        check (c.model.showingTake(), "disarmed: the take is kept");
+        c.model.clear();
+        check (! c.model.showingTake() && ! c.model.hasTake() && c.model.current().empty() && c.model.bars() == 0,
+               "reset after a take: the take goes too, nothing is shown");
+        c.block (100, { MidiEvent::noteOn (1, 48, 100, 0), MidiEvent::noteOff (1, 48, 50) });
+        check (c.model.current().size() == 1, "capture goes on after a reset");
     }
 
     //==========================================================================
@@ -693,6 +740,7 @@ int main()
     testStampsStoppedAndJumps();
     testStreams();
     testModel();
+    testClear();
     testThroughEngine();
     testRenderings();
     testMidiFile();

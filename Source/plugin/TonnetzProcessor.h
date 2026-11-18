@@ -193,7 +193,16 @@ namespace tonnetz
         // Takes what the audio thread captured into the model (the timer does it 20 times a
         // second; public so tests needn't run a message loop). True if anything changed.
         bool pollCapture();
+        // Reset capture (the strip's "reset"): forgets what was captured, the take included;
+        // an armed take carries on, empty (CaptureModel::clear).
+        void clearCapture();
         CaptureModel& captureModel() noexcept { return capture; }
+
+        // Reset settings (the settings column's "reset"): every parameter in that column back to
+        // its default, as host gestures. The header (Enable, Mode, Key), Slot, the capture
+        // toggles, the slot words, W and the view are left as they are.
+        static const juce::StringArray& settingsParameterIDs();
+        void resetSettings();
         const CaptureModel& captureModel() const noexcept { return capture; }
 
         // The capture shown in the strip (the take, else the last 64 bars) as a MIDI file in the

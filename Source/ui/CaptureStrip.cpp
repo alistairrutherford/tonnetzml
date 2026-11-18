@@ -14,8 +14,8 @@ namespace tonnetz::ui
             return *param;
         }
 
-        constexpr float leftWidth = 150.0f;        // the toggles and the summary
-        constexpr int handleWidth = 92, saveWidth = 44;
+        constexpr float leftWidth = 176.0f;        // the toggles and the summary
+        constexpr int handleWidth = 100, saveWidth = 50;
     }
 
     //==========================================================================
@@ -33,7 +33,7 @@ namespace tonnetz::ui
         auto r = getLocalBounds().toFloat().reduced (2.0f, 7.0f);
         g.setColour (any ? (isMouseOver() || dragging ? k.generated : k.line) : k.lineFaint);
         g.drawRoundedRectangle (r, 4.0f, dragging ? 2.0f : 1.2f);
-        g.setFont (Ink::ui (12.5f, dragging));
+        g.setFont (Ink::ui (13.5f, dragging));
         g.setColour (any ? (isMouseOver() ? k.generated : k.text) : k.textFaint);
         const bool alt = juce::ModifierKeys::currentModifiers.isAltDown();
         g.drawText (utf8 ("\xe2\x87\xa9 drag MIDI") + (alt ? utf8 (" \xe2\x99\xa9") : juce::String()), r, juce::Justification::centred, false);
@@ -54,12 +54,16 @@ namespace tonnetz::ui
           captureToggle (paramOf (p, params::capture), p.editorView(), {}, utf8 ("\xe2\xa6\xbf capture"), utf8 ("\xe2\x97\x8b capture")),
           sourceToggle (paramOf (p, params::captureSource), p.editorView(), {}, "+ source"),
           handle (*this),
-          save (p.editorView(), utf8 ("save\xe2\x80\xa6"), [this] { saveAs (juce::ModifierKeys::currentModifiers.isAltDown()); }, 12.5f)
+          save (p.editorView(), utf8 ("save\xe2\x80\xa6"), [this] { saveAs (juce::ModifierKeys::currentModifiers.isAltDown()); }, 13.5f),
+          reset (p.editorView(), "reset", [this] { processor.clearCapture(); refresh(); }, 13.5f)
     {
         captureToggle.setComponentID (params::capture);
         sourceToggle.setComponentID (params::captureSource);
         handle.setComponentID ("ui.drag");
         save.setComponentID ("ui.save");
+        reset.setComponentID ("ui.resetCapture");
+        reset.setConfirm ("sure?");
+        reset.setTooltip ("Reset capture: forgets the chords captured, the take included (click again to confirm).");
         captureToggle.setTooltip ("Capture: arm a take. Everything played from now until it is disarmed is kept (the strip "
                                   "shows it); with it off the strip shows the last 64 bars, always kept.");
         sourceToggle.setTooltip ("Capture the source notes too (what was played into TonnetzML), on their own track.");
@@ -68,21 +72,23 @@ namespace tonnetz::ui
         addAndMakeVisible (sourceToggle);
         addAndMakeVisible (handle);
         addAndMakeVisible (save);
+        addAndMakeVisible (reset);
         refresh();
     }
 
     juce::Rectangle<float> CaptureStrip::glyphArea() const
     {
-        return getLocalBounds().toFloat().withTrimmedLeft (leftWidth).withTrimmedRight ((float) (handleWidth + saveWidth + 8)).reduced (4.0f, 3.0f);
+        return getLocalBounds().toFloat().withTrimmedLeft (leftWidth).withTrimmedRight ((float) (handleWidth + saveWidth + reset.preferredWidth() + 16)).reduced (4.0f, 3.0f);
     }
 
     void CaptureStrip::resized()
     {
         auto r = getLocalBounds();
         auto left = r.removeFromLeft ((int) leftWidth).reduced (8, 0);
-        const int h = 18;
+        const int h = 20;
         captureToggle.setBounds (left.getX(), 5, captureToggle.preferredWidth(), h);
         sourceToggle.setBounds (captureToggle.getRight() + 8, 5, sourceToggle.preferredWidth(), h);
+        reset.setBounds (r.removeFromRight (reset.preferredWidth() + 8).withSizeKeepingCentre (reset.preferredWidth() + 8, h));
         save.setBounds (r.removeFromRight (saveWidth).withSizeKeepingCentre (saveWidth, h));
         handle.setBounds (r.removeFromRight (handleWidth + 4).withTrimmedRight (4));
     }
@@ -104,6 +110,7 @@ namespace tonnetz::ui
         captureToggle.refresh();
         sourceToggle.refresh();
         const auto& cap = processor.captureModel();
+        reset.setEnabled (cap.bars() > 0 || cap.showingTake());
         if (cap.revision() != builtRevision || cap.showingTake() != builtShowingTake || cap.isArmed() != builtArmed)
         {
             const bool wasAtEnd = scroll <= 0.5f;
@@ -307,14 +314,14 @@ namespace tonnetz::ui
         g.fillRect (0.0f, 0.0f, (float) getWidth(), 1.0f);
 
         // The summary under the toggles.
-        g.setFont (Ink::ui (11.5f));
+        g.setFont (Ink::ui (13.0f));
         g.setColour (k.textFaint);
-        g.drawText (summary(), juce::Rectangle<float> (8.0f, 25.0f, leftWidth - 12.0f, 16.0f), juce::Justification::centredLeft, false);
+        g.drawText (summary(), juce::Rectangle<float> (8.0f, 28.0f, leftWidth - 12.0f, 18.0f), juce::Justification::centredLeft, false);
 
         const auto area = glyphArea();
         if (chords.empty())
         {
-            g.setFont (Ink::ui (12.0f));
+            g.setFont (Ink::ui (13.0f));
             g.drawText (utf8 ("the chords played collect here \xe2\x80\x94 click one to play it again, drag the handle out for MIDI"),
                         area, juce::Justification::centredLeft, true);
             return;
@@ -329,7 +336,7 @@ namespace tonnetz::ui
             if (box.getRight() < area.getX())
                 break;
             drawGlyph (g, chords[(size_t) i], box, i == recalled);
-            g.setFont (Ink::note (10.5f));
+            g.setFont (Ink::note (11.5f));
             g.setColour (chords[(size_t) i].stream == CaptureStream::Source ? k.source : k.text);
             g.drawFittedText (names[(size_t) i], box.removeFromBottom (13.0f).toNearestInt(), juce::Justification::centred, 1, 0.7f);
         }
@@ -337,7 +344,7 @@ namespace tonnetz::ui
         if (scroll > 0.5f)
         {
             g.setColour (k.textFaint);
-            g.setFont (Ink::ui (12.0f));
+            g.setFont (Ink::ui (13.0f));
             g.drawText (utf8 ("\xe2\x80\xba"), area.withLeft (area.getRight() - 8.0f).translated (6.0f, 0.0f), juce::Justification::centred, false);
         }
     }

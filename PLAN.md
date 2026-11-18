@@ -404,6 +404,20 @@ is also drawn faintly at its other copies on the torus. Numerals: `core/theory/R
 hover audition (Phase 6, done), the camera and theme saved
 with the set (Phase 6, done).
 
+*As built (after 1.0.1): resets and bigger labels.* **Reset capture** (`ui.resetCapture`, at the
+capture strip's right, after save…) calls `TonnetzProcessor::clearCapture` → `CaptureModel::clear`:
+the last 64 bars and the take go, notes still sounding are kept from the reset (their note-offs
+still land), an armed take carries on empty; dimmed while nothing is captured. **Reset settings**
+(`ui.resetSettings`, on the settings column's fold line: "reset  settings ▴") calls
+`TonnetzProcessor::resetSettings`: each of `settingsParameterIDs()` (exactly the column's 18
+parameters, checked by the snapshot app) to its default as a host gesture; Mode, Key, Slot, Enable,
+the capture toggles, the slot words, `W` and the view stay. Both are `HudButton`s with a confirm
+text: a click shows "sure?" in vermilion for 3 s and a second click acts. Type: HUD values 14.5 pt
+(were 13), captions and the strips' small buttons 13 (were 11.5), the lattice's hints 12.5 (were
+11), glyph names 11.5; `textFaint` darker (paper `#625b51`, night `#a49f91`). The settings column's
+rows are 18-22 px, sized to end above the word bar; the capture strip is 52 px (was 46), the
+keyboard strip's bar 22 (was 18).
+
 *As built (after 1.0.0): the Info View.* Like NoteCap's (and Live's): a strip along the very
 bottom, under the keyboard strip, full width, 42 px (`ui/InfoView`). Pointing at anything shows
 a bold title run into a line or two of text: what it does and what its settings mean; elsewhere

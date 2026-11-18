@@ -30,6 +30,9 @@ namespace tonnetz::ui
             { "ui.follow", "Follow", "On: the view eases to keep the chord played and the chord made in sight." },
             { "ui.latticeRelease", "Release", "Lets go of the triangle or set the lattice holds (Sticky)." },
             { "ui.settings", "Settings", "Shows or folds this column of the other settings." },
+            { "ui.resetSettings", "Reset settings",
+              "Puts every setting in this column back to its default. Click, then click \"sure?\" within 3 seconds. "
+              "Mode, Key, the slots' words and the capture stay." },
 
             // ---- The settings column ----------------------------------------------------------
             { "mix", "Out",
@@ -81,6 +84,9 @@ namespace tonnetz::ui
             { "captureSource", "Capture source", "Also captures the chords played in, on a track of their own in the file." },
             { "ui.drag", "Drag MIDI",
               "Drag into a track or the Finder: the capture as a MIDI file, as played. Hold Alt for one block chord per change, on the grid." },
+            { "ui.resetCapture", "Reset capture",
+              "Forgets the chords captured, the take included; an armed take carries on, empty. Click, then click \"sure?\" "
+              "within 3 seconds." },
             { "ui.save", "Save", "Saves the capture as a .mid file (as played; Alt-click: one block chord per change)." },
 
             // ---- The keyboard -----------------------------------------------------------------

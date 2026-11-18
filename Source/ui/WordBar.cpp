@@ -16,7 +16,7 @@ namespace tonnetz::ui
             return LatticeModel::pretty (printWord (w).c_str()).replace ("-", utf8 ("\xe2\x88\x92"));
         }
 
-        constexpr int captionW = 40;
+        constexpr int captionW = 46;
     }
 
     //==========================================================================
@@ -364,7 +364,7 @@ namespace tonnetz::ui
         const auto& k = ink();
         const auto row = chipsArea();
         g.setColour (k.textFaint);
-        g.setFont (Ink::ui (11.5f));
+        g.setFont (Ink::ui (13.0f));
         const int m = mode();
         g.drawText (m == (int) Mode::Orbit ? "cycle" : m == (int) Mode::Mirror ? "slot W" : "W",
                     juce::Rectangle<float> (8.0f, row.getY(), (float) captionW, row.getHeight()), juce::Justification::centredLeft, false);
@@ -397,8 +397,8 @@ namespace tonnetz::ui
         if (w.empty())
         {
             g.setColour (k.textFaint);
-            g.setFont (Ink::ui (12.0f));
-            g.drawText (m == (int) Mode::Orbit ? "(no cycle)" : utf8 ("none: the chord as played"), juce::Rectangle<float> (row.getX() + 30.0f, row.getY(), 220.0f, row.getHeight()),
+            g.setFont (Ink::ui (13.0f));
+            g.drawText (m == (int) Mode::Orbit ? "(no cycle)" : utf8 ("none: the chord as played"), juce::Rectangle<float> ((float) homeButton.getRight() + 10.0f, row.getY(), 240.0f, row.getHeight()),
                         juce::Justification::centredLeft, false);
         }
         if (dragging >= 0)
@@ -413,8 +413,8 @@ namespace tonnetz::ui
         if (note.isNotEmpty())
         {
             g.setColour (noteIsError ? k.warn : k.textFaint);
-            g.setFont (Ink::ui (11.0f));
-            g.drawText (note, juce::Rectangle<float> (row.getX(), row.getBottom() + 1.0f, (float) getWidth() - row.getX(), 14.0f), juce::Justification::centredLeft, true);
+            g.setFont (Ink::ui (12.0f));
+            g.drawText (note, juce::Rectangle<float> (row.getX(), row.getBottom() + 1.0f, (float) getWidth() - row.getX(), 16.0f), juce::Justification::centredLeft, true);
         }
     }
 

@@ -24,8 +24,8 @@ namespace tonnetz::ui
               if (v.follow)
                   followChords (false);
               repaint();
-          }, 11.5f),
-          release (p.editorView(), "release", [this] { releaseLattice(); repaint(); }, 11.5f)
+          }, 13.0f),
+          release (p.editorView(), "release", [this] { releaseLattice(); repaint(); }, 13.0f)
     {
         setOpaque (true);
         follow.setComponentID ("ui.follow");
@@ -52,9 +52,9 @@ namespace tonnetz::ui
     void LatticeView::resized()
     {
         updateGeometry();
-        const int y = getHeight() - 20;
-        follow.setBounds (getWidth() - 74, y, 70, 18);
-        release.setBounds (getWidth() - 74 - 62, y, 58, 18);
+        const int y = getHeight() - 22;
+        follow.setBounds (getWidth() - 82, y, 78, 20);
+        release.setBounds (getWidth() - 82 - 68, y, 64, 20);
     }
 
     //==========================================================================
@@ -1046,7 +1046,7 @@ namespace tonnetz::ui
             return;
         // W op by op: an arrow from each chord's centre to the next, labelled with its op.
         juce::Point<float> from = screen (model.source.a, model.source.b);
-        g.setFont (Ink::ui (11.0f, true));
+        g.setFont (Ink::ui (12.0f, true));
         const int n = (int) model.path.size();
         for (int i = 0; i < n; ++i)
         {
@@ -1142,9 +1142,9 @@ namespace tonnetz::ui
         const auto& k = ink();
         if (! hovering || tip.isEmpty())
             return;
-        const auto f = Ink::ui (12.5f, hoverGhost >= 0);
+        const auto f = Ink::ui (13.5f, hoverGhost >= 0);
         const float w = juce::GlyphArrangement::getStringWidth (f, tip) + 14.0f;
-        auto r = juce::Rectangle<float> (w, 20.0f).withPosition (hoverAt + juce::Point<float> (14.0f, 12.0f));
+        auto r = juce::Rectangle<float> (w, 22.0f).withPosition (hoverAt + juce::Point<float> (14.0f, 12.0f));
         if (r.getRight() > getWidth() - 4) r.setX (hoverAt.x - w - 10.0f);
         if (r.getBottom() > getHeight() - 24) r.setY (hoverAt.y - 32.0f);
         g.setColour (k.wash);
@@ -1182,10 +1182,10 @@ namespace tonnetz::ui
         // The bottom line: how to play it, Follow, Release.
         follow.setText (utf8 (processor.editorView().follow ? "\xe2\x97\x8f follow" : "\xe2\x97\x8b follow"));
         release.setEnabled (notes.any (EditorNotes::lattice));
-        g.setFont (Ink::ui (11.0f));
+        g.setFont (Ink::ui (12.5f));
         g.setColour (k.textFaint);
         g.drawText (utf8 ("click a triangle \xc2\xb7 drag to glide \xc2\xb7 shift-click notes \xc2\xb7 right-drag pans \xc2\xb7 scroll zooms \xc2\xb7 double-click recentres"),
-                    juce::Rectangle<int> (12, getHeight() - 20, getWidth() - 160, 18), juce::Justification::centredLeft, true);
+                    juce::Rectangle<int> (12, getHeight() - 22, getWidth() - 170, 20), juce::Justification::centredLeft, true);
         drawTip (g);
     }
 }

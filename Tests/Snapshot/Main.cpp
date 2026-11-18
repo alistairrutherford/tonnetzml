@@ -1974,6 +1974,121 @@ namespace
     }
 
     // The Info View (hover help along the bottom, as in NoteCap and Live).
+    // 1.0.2: Reset capture and Reset settings. Each asks first ("sure?"), then acts on a second click.
+    void testResets (const juce::File& fixtures, const juce::File& output)
+    {
+        std::cout << "resets" << std::endl;
+        MiniHost h;
+        setPlain (*h.p, params::gatherMs, 0.0f);
+        std::unique_ptr<juce::AudioProcessorEditor> e (h.p->createEditor());
+        auto& ed = editorOf (e);
+        ed.freezeAnimation (true);
+        auto& strip = ed.captureStrip();
+        auto& resetCapture = strip.resetButton();
+
+        ed.refreshNow();
+        check (! resetCapture.isEnabled(), "Reset capture is dimmed while nothing is captured");
+        for (int i = 0; i < 3; ++i)
+        {
+            h.process (chordOn ({ 60 + 2 * i, 64 + 2 * i, 67 + 2 * i }));
+            h.runTo (h.pos + MiniHost::at (1.0));
+            juce::MidiBuffer off;
+            for (int n : { 60 + 2 * i, 64 + 2 * i, 67 + 2 * i })
+                off.addEvent (juce::MidiMessage::noteOff (1, n), 0);
+            h.process (off);
+        }
+        ed.refreshNow();
+        const int before = strip.glyphCount();
+        resetCapture.press();
+        ed.refreshNow();
+        check (before == 3 && resetCapture.isEnabled() && resetCapture.isAsking() && strip.glyphCount() == before,
+               "Reset capture: a first click only asks (" + juce::String (before) + " glyphs kept)");
+        compareImage (editorImage (ed, 760, 520), "reset_capture_asking_paper_760x520", fixtures, output);
+        resetCapture.press();
+        ed.refreshNow();
+        check (! resetCapture.isAsking() && strip.glyphCount() == 0 && strip.dragOut (false, false) == juce::File() && ! resetCapture.isEnabled(),
+               "a second click forgets the capture: no glyphs, nothing to drag (" + juce::String (strip.glyphCount()) + ")");
+        h.process (chordOn ({ 62, 65, 69 }));
+        h.process();
+        ed.refreshNow();
+        check (strip.glyphCount() == 1, "capture goes on after the reset");
+
+        // Armed: the take carries on, empty.
+        set (*h.p, params::capture, true);
+        h.process();
+        h.process (chordOn ({ 57, 60, 64 }));
+        h.process();
+        ed.refreshNow();
+        resetCapture.press();
+        resetCapture.press();
+        ed.refreshNow();
+        check (plain (*h.p, params::capture) == 1.0f && h.p->captureModel().isArmed() && strip.glyphCount() == 0,
+               "reset while a take is armed: still armed, the take empty");
+        set (*h.p, params::capture, false);
+
+        // Reset settings: the settings column back to its defaults; the rest stays.
+        auto& resetSettings = ed.settings().resetButton();
+        h.p->setSlotWordText (2, "P +5");
+        setPlain (*h.p, params::mode, 1.0f);
+        setPlain (*h.p, params::slot, 2.0f);
+        setPlain (*h.p, params::mix, 2.0f);
+        setPlain (*h.p, params::genChannel, 9.0f);
+        setPlain (*h.p, params::octave, -2.0f);
+        setPlain (*h.p, params::orbitRate, 3.0f);
+        set (*h.p, params::latch, true);
+        set (*h.p, params::opZoneOn, false);
+        set (*h.p, params::inKey, true);
+        set (*h.p, params::previewTone, true);
+        ed.refreshNow();
+        resetSettings.press();
+        ed.refreshNow();
+        check (resetSettings.isAsking() && plain (*h.p, params::mix) == 2.0f && plain (*h.p, params::genChannel) == 9.0f,
+               "Reset settings: a first click only asks");
+        compareImage (editorImage (ed, 760, 520), "reset_settings_asking_paper_760x520", fixtures, output);
+        resetSettings.press();
+        ed.refreshNow();
+        juce::StringArray notDefault;
+        for (const auto& id : TonnetzProcessor::settingsParameterIDs())
+        {
+            auto* p = h.p->getState().getParameter (id);
+            if (p == nullptr || p->getValue() != p->getDefaultValue())
+                notDefault.add (id);
+        }
+        check (! resetSettings.isAsking() && notDefault.isEmpty() && TonnetzProcessor::settingsParameterIDs().size() == 18,
+               "a second click puts the column's 18 settings back to their defaults " + notDefault.joinIntoString (" "));
+        check (plain (*h.p, params::mode) == 1.0f && plain (*h.p, params::slot) == 2.0f && plain (*h.p, params::enable) == 1.0f
+                   && printWord (h.p->getSlotWord (2)).c_str() == std::string ("P +5"),
+               "Mode, Slot, Enable and the slots' words are left as they were");
+
+        // Every settings-column control is one of those 18, and each of the 18 is in the column.
+        juce::StringArray inColumn;
+        {
+            juce::Array<ui::HudControl*> cs;
+            ed.settings().controls (cs);
+            for (auto* c : cs)
+                inColumn.add (c->getComponentID());
+        }
+        inColumn.sort (false);
+        auto listed = TonnetzProcessor::settingsParameterIDs();
+        listed.sort (false);
+        check (inColumn == listed, "Reset settings covers exactly the settings column (" + inColumn.joinIntoString (" ") + ")");
+
+        // Both buttons fit at the smallest size and the column stays above the word bar.
+        for (const auto& size : { std::make_pair (760, 520), std::make_pair (1400, 900) })
+        {
+            ed.setSize (size.first, size.second);
+            ed.refreshNow();
+            const auto rs = ed.getLocalArea (&resetSettings, resetSettings.getLocalBounds());
+            const auto rc = ed.getLocalArea (&resetCapture, resetCapture.getLocalBounds());
+            const auto column = ed.settings().getBounds();
+            const auto bar = ed.wordBar().getBounds();
+            check (ed.getLocalBounds().contains (rs) && ed.getLocalBounds().contains (rc) && rs.getWidth() >= resetSettings.preferredWidth() - 1
+                       && rc.getWidth() >= resetCapture.preferredWidth() - 1 && column.getBottom() <= bar.getY() + 4,
+                   juce::String (size.first) + " x " + juce::String (size.second) + ": both reset buttons fit, the settings column ends above the word bar ("
+                       + juce::String (column.getBottom()) + " / " + juce::String (bar.getY()) + ")");
+        }
+    }
+
     void testInfoView (const juce::File& fixtures, const juce::File& output)
     {
         std::cout << "info view" << std::endl;
@@ -2076,6 +2191,7 @@ int main (int argc, char* argv[])
     testCapture (fixtures, output);
     testFinish (fixtures, output);
     testInfoView (fixtures, output);
+    testResets (fixtures, output);
     testThrough();
     testRig (output);
     testParams();

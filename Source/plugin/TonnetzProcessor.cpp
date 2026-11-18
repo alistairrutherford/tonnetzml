@@ -378,6 +378,32 @@ namespace tonnetz
         return capture.drain (captureQueue);
     }
 
+    void TonnetzProcessor::clearCapture()
+    {
+        capture.drain (captureQueue);      // what is queued belongs to before the reset
+        capture.clear();
+    }
+
+    const juce::StringArray& TonnetzProcessor::settingsParameterIDs()
+    {
+        static const juce::StringArray ids { params::mix, params::sourceChannel, params::genChannel, params::registerMode, params::bass,
+                                             params::octave, params::gatherMs, params::orbitCycle, params::orbitRate, params::walkInput,
+                                             params::latch, params::opZoneOn, params::opZoneStart, params::keyTonic, params::keyMinor,
+                                             params::inKey, params::previewTone, params::testRig };
+        return ids;
+    }
+
+    void TonnetzProcessor::resetSettings()
+    {
+        for (const auto& id : settingsParameterIDs())
+            if (auto* p = state.getParameter (id))
+            {
+                p->beginChangeGesture();
+                p->setValueNotifyingHost (p->getDefaultValue());
+                p->endChangeGesture();
+            }
+    }
+
     MidiSong TonnetzProcessor::captureSong (CaptureRendering rendering) const
     {
         const auto& clock = capture.clock();

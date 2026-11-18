@@ -37,7 +37,7 @@ namespace tonnetz::ui
             k.line = juce::Colour (0xff2a2724);
             k.lineFaint = juce::Colour (0x552a2724);
             k.text = juce::Colour (0xff221f1c);
-            k.textFaint = juce::Colour (0xff7d756a);
+            k.textFaint = juce::Colour (0xff625b51);   // darker than before 1.0.2: captions read at a glance
             k.node = juce::Colour (0xfffbf8f1);
             k.wash = juce::Colour (0xd9f3eee2);
             k.source = juce::Colour (0xff0e7c7b);
@@ -59,7 +59,7 @@ namespace tonnetz::ui
             k.line = juce::Colour (0xffcfc8b6);
             k.lineFaint = juce::Colour (0x40cfc8b6);
             k.text = juce::Colour (0xffe9e3d4);
-            k.textFaint = juce::Colour (0xff8c8778);
+            k.textFaint = juce::Colour (0xffa49f91);
             k.node = juce::Colour (0xff1d2226);
             k.wash = juce::Colour (0xd015191c);
             k.source = juce::Colour (0xff3cbcb2);

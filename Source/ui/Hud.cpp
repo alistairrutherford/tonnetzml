@@ -260,13 +260,13 @@ namespace tonnetz::ui
         {
             const auto r = optionBounds (i).reduced (gap * 0.5f, 0.0f);
             const bool on = i == current;
-            g.setFont (Ink::ui (13.0f, on));
+            g.setFont (Ink::ui (14.5f, on));
             g.setColour (on ? k.text : (i == hover ? k.generated : k.textFaint));
             g.drawText (labels[i], r.withWidth (r.getWidth() + 8.0f), juce::Justification::centredLeft, false);
             if (on)
             {
                 g.setColour (k.generated);
-                g.fillRect (r.getX(), r.getCentreY() + 8.0f, textWidth (Ink::ui (13.0f, true), labels[i]), 1.5f);
+                g.fillRect (r.getX(), r.getCentreY() + 8.0f, textWidth (Ink::ui (14.5f, true), labels[i]), 1.5f);
             }
             if (marked && marked (i) && ! on)
             {
@@ -320,14 +320,14 @@ namespace tonnetz::ui
         return glyph() + " " + t;
     }
 
-    int KeyBadge::preferredWidth() const { return (int) std::ceil (textWidth (Ink::ui (13.0f, true), valueText()) + 6.0f); }
+    int KeyBadge::preferredWidth() const { return (int) std::ceil (textWidth (Ink::ui (14.5f, true), valueText()) + 6.0f); }
 
     void KeyBadge::paint (juce::Graphics& g)
     {
         const auto& k = ink();
         const int mode = (int) std::lround (plain());
         const bool tentative = mode == (int) KeyMode::Listen && (! model.guess.has() || model.guess.state != GuessState::Confident);
-        g.setFont (Ink::ui (13.0f, mode != (int) KeyMode::Off && ! tentative));
+        g.setFont (Ink::ui (14.5f, mode != (int) KeyMode::Off && ! tentative));
         g.setColour (isMouseOver() ? k.generated : (mode == (int) KeyMode::Off || tentative ? k.textFaint : k.text));
         g.drawText (valueText(), getLocalBounds().toFloat(), juce::Justification::centredLeft, false);
     }
@@ -392,14 +392,36 @@ namespace tonnetz::ui
         setMouseCursor (juce::MouseCursor::PointingHandCursor);
     }
 
-    int HudButton::preferredWidth() const { return (int) std::ceil (textWidth (Ink::ui (size), text) + 6.0f); }
+    int HudButton::preferredWidth() const
+    {
+        // Wide enough for its question too, so asking doesn't move anything.
+        const float w = juce::jmax (textWidth (Ink::ui (size, lit), text), confirmText.isEmpty() ? 0.0f : textWidth (Ink::ui (size, true), confirmText));
+        return (int) std::ceil (w + 6.0f);
+    }
+
+    void HudButton::press()
+    {
+        if (! isEnabled() || ! click)
+            return;
+        if (confirmText.isNotEmpty() && ! asking)
+        {
+            asking = true;
+            startTimer (3000);
+            repaint();
+            return;
+        }
+        stopTimer();
+        asking = false;
+        repaint();
+        click();
+    }
 
     void HudButton::paint (juce::Graphics& g)
     {
         const auto& k = Ink::of (view.dark);
-        g.setFont (Ink::ui (size, lit));
-        g.setColour (! isEnabled() ? k.lineFaint : isMouseOver() ? k.generated : (lit ? k.text : k.textFaint));
-        g.drawText (text, getLocalBounds().toFloat(), juce::Justification::centred, false);
+        g.setFont (Ink::ui (size, lit || asking));
+        g.setColour (! isEnabled() ? k.lineFaint : (asking || isMouseOver()) ? k.generated : (lit ? k.text : k.textFaint));
+        g.drawText (asking ? confirmText : text, getLocalBounds().toFloat(), juce::Justification::centred, false);
     }
 
     //==========================================================================
@@ -473,7 +495,7 @@ namespace tonnetz::ui
         if (sentence.isEmpty())
         {
             g.setColour (k.textFaint);
-            g.setFont (Ink::ui (12.5f));
+            g.setFont (Ink::ui (13.5f));
             g.drawText (utf8 ("play a chord, or click a triangle"), area, juce::Justification::centredRight, true);
             return;
         }
@@ -514,7 +536,8 @@ namespace tonnetz::ui
               refresh();
               if (layoutChanged)
                   layoutChanged();
-          }, 11.5f)
+          }, 13.0f),
+          reset (p.editorView(), "reset", [this] { processor.resetSettings(); refresh(); }, 13.0f)
     {
         const auto& v = p.editorView();
         auto add = [this] (HudControl* c) { owned.add (c); addAndMakeVisible (c); return c; };
@@ -539,16 +562,29 @@ namespace tonnetz::ui
         lines.add ({ "test", { add (new HudToggle (paramOf (P, params::testRig), v, {}, "rig")) } });
         fold.setComponentID ("ui.settings");
         addAndMakeVisible (fold);
+        // Reset settings: on the fold's line, so it reads "reset  settings ▴".
+        reset.setComponentID ("ui.resetSettings");
+        reset.setConfirm ("sure?");
+        reset.setTooltip ("Reset settings: every setting in this column back to its default (click again to confirm).");
+        addAndMakeVisible (reset);
         refresh();
+    }
+
+    int Settings::rowHeight() const
+    {
+        if (! processor.editorView().showSettings)
+            return maxRow;
+        return juce::jlimit (minRow, maxRow, (getHeight() - 8) / (lines.size() + 1));
     }
 
     juce::String Settings::infoKeyAt (juce::Point<int> p) const
     {
         // A line's caption and the gaps between its items stand for its first item.
         auto r = getLocalBounds().reduced (8, 4);
-        if (p.y < r.getY() + lineHeight || ! processor.editorView().showSettings)
-            return fold.getComponentID();
-        const int line = (p.y - r.getY()) / lineHeight - 1;
+        const int row = rowHeight();
+        if (p.y < r.getY() + row || ! processor.editorView().showSettings)
+            return p.x < fold.getX() - 4 && p.x >= reset.getX() - 4 ? reset.getComponentID() : fold.getComponentID();
+        const int line = (p.y - r.getY()) / row - 1;
         if (line >= 0 && line < lines.size() && ! lines.getReference (line).items.isEmpty())
             return lines.getReference (line).items.getFirst()->getComponentID();
         return {};
@@ -560,11 +596,12 @@ namespace tonnetz::ui
             out.add (c);
     }
 
-    juce::Rectangle<int> Settings::preferredSize() const
+    juce::Rectangle<int> Settings::preferredSize (int maxHeight) const
     {
+        const int top = fold.preferredWidth() + 8 + reset.preferredWidth();
         if (! processor.editorView().showSettings)
-            return { 0, 0, 90, lineHeight };
-        int w = 0;
+            return { 0, 0, top + 16, maxRow + 8 };
+        int w = top;
         for (const auto& line : lines)
         {
             int lw = captionWidth;
@@ -572,7 +609,8 @@ namespace tonnetz::ui
                 lw += c->preferredWidth() + 10;
             w = juce::jmax (w, lw);
         }
-        return { 0, 0, w + 16, lineHeight * (lines.size() + 1) + 8 };
+        const int row = juce::jlimit (minRow, maxRow, (maxHeight - 8) / (lines.size() + 1));
+        return { 0, 0, w + 16, row * (lines.size() + 1) + 8 };
     }
 
     void Settings::refresh()
@@ -594,10 +632,14 @@ namespace tonnetz::ui
     void Settings::resized()
     {
         auto r = getLocalBounds().reduced (8, 4);
-        fold.setBounds (r.removeFromTop (lineHeight).removeFromRight (fold.preferredWidth()));
+        const int h = rowHeight();
+        auto top = r.removeFromTop (h);
+        fold.setBounds (top.removeFromRight (fold.preferredWidth()));
+        top.removeFromRight (8);
+        reset.setBounds (top.removeFromRight (reset.preferredWidth()));
         for (const auto& line : lines)
         {
-            auto row = r.removeFromTop (lineHeight);
+            auto row = r.removeFromTop (h);
             for (int i = line.items.size(); --i >= 0;)
             {
                 auto* c = line.items[i];
@@ -617,13 +659,14 @@ namespace tonnetz::ui
         juce::ColourGradient wash (k.ground.withAlpha (0.0f), 0.0f, 0.0f, k.wash, 40.0f, 0.0f, false);
         g.setGradientFill (wash);
         g.fillRoundedRectangle (getLocalBounds().toFloat(), 10.0f);
-        g.setFont (Ink::ui (11.5f));
+        g.setFont (Ink::ui (13.0f));
         g.setColour (k.textFaint);
         auto r = getLocalBounds().reduced (8, 4);
-        r.removeFromTop (lineHeight);
+        const int h = rowHeight();
+        r.removeFromTop (h);
         for (const auto& line : lines)
         {
-            auto row = r.removeFromTop (lineHeight);
+            auto row = r.removeFromTop (h);
             int left = row.getRight();
             for (auto* c : line.items)
                 left = juce::jmin (left, c->getX());

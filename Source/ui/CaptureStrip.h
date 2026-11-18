@@ -10,6 +10,8 @@
 //   ⇩ drag MIDI            drag it out (into Live, or the Finder): the capture as a .mid
 //                          (As played; with Alt, Chords). `performExternalDragDropOfFiles`
 //   save…                  a file chooser (Alt-click: Chords)
+//   reset                  forgets the capture (click, then "sure?" within 3 s); an armed take
+//                          carries on, empty
 #pragma once
 
 #include "EditorNotes.h"
@@ -21,7 +23,7 @@ namespace tonnetz::ui
     class CaptureStrip final : public juce::Component
     {
     public:
-        static constexpr int stripHeight = 46;
+        static constexpr int stripHeight = 52;
         static constexpr float glyphWidth = 40.0f;
 
         CaptureStrip (TonnetzProcessor&, const LatticeModel&, LatticeView&, EditorNotes&);
@@ -42,6 +44,7 @@ namespace tonnetz::ui
         juce::File dragOut (bool chords, bool performDrag = true);
         juce::Component& dragHandle() noexcept { return handle; }
         juce::Component& saveButton() noexcept { return save; }
+        HudButton& resetButton() noexcept { return reset; }
 
         void paint (juce::Graphics&) override;
         void resized() override;
@@ -77,7 +80,7 @@ namespace tonnetz::ui
         EditorNotes& notes;
         HudToggle captureToggle, sourceToggle;
         Handle handle;
-        HudButton save;
+        HudButton save, reset;
         std::unique_ptr<juce::FileChooser> chooser;
 
         std::vector<CapturedChord> chords;

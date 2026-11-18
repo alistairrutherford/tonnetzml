@@ -438,14 +438,33 @@ namespace tonnetz
             ++losses;
         }
 
+        // Reset capture (the strip's "reset"): forgets everything captured. Notes still sounding
+        // are kept, starting again now (as when a take is armed), so their note-offs still land;
+        // an armed take carries on, empty from now; a finished take is gone.
         void clear()
         {
-            retro.clear();
-            take.clear();
-            haveTake = false;
-            for (auto& ids : openIds)
-                ids.clear();
-            anyOpen = false;
+            const auto restartOpen = [this] (std::vector<CapturedNote>& list)
+            {
+                std::vector<CapturedNote> open;
+                for (auto n : list)
+                    if (n.open)
+                    {
+                        n.start = n.end = now;
+                        open.push_back (n);
+                    }
+                list.swap (open);
+            };
+            restartOpen (retro);
+            if (armed)
+            {
+                restartOpen (take);
+                takeStart = now;
+            }
+            else
+            {
+                take.clear();
+                haveTake = false;
+            }
             ++rev;
         }
 

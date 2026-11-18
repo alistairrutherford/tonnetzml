@@ -49,8 +49,8 @@ namespace tonnetz::ui
 
     protected:
         const Ink& ink() const { return Ink::of (view.dark); }
-        juce::Font font() const { return Ink::ui (13.0f); }
-        juce::Font captionFont() const { return Ink::ui (11.5f); }
+        juce::Font font() const { return Ink::ui (14.5f); }
+        juce::Font captionFont() const { return Ink::ui (13.0f); }
         float captionWidth() const;
         void step (int delta, bool wrap);
 
@@ -133,25 +133,32 @@ namespace tonnetz::ui
         const LatticeModel& model;
     };
 
-    // A clickable word or glyph that isn't a parameter (the theme, Release, ‹ ›, ⌫).
-    class HudButton final : public juce::Component, public juce::SettableTooltipClient
+    // A clickable word or glyph that isn't a parameter (the theme, Release, ‹ ›, ⌫, reset).
+    // With a confirm text (`setConfirm`) a click only asks: the button shows that text in
+    // vermilion, and a second click within 3 seconds acts (the resets).
+    class HudButton final : public juce::Component, public juce::SettableTooltipClient, private juce::Timer
     {
     public:
         HudButton (const EditorView& v, juce::String text, std::function<void()> onClick, float size = 13.0f);
         void setText (const juce::String& t) { if (t != text) { text = t; repaint(); } }
         void setLit (bool on) { if (on != lit) { lit = on; repaint(); } }
+        void setConfirm (juce::String askText) { confirmText = std::move (askText); }
+        bool isAsking() const noexcept { return asking; }
         int preferredWidth() const;
         void paint (juce::Graphics&) override;
         void mouseEnter (const juce::MouseEvent&) override { repaint(); }
         void mouseExit (const juce::MouseEvent&) override { repaint(); }
-        void mouseUp (const juce::MouseEvent& e) override { if (isEnabled() && getLocalBounds().contains (e.getPosition()) && click) click(); }
+        void mouseUp (const juce::MouseEvent& e) override { if (getLocalBounds().contains (e.getPosition())) press(); }
+        // What a click does (tests call it).
+        void press();
         std::function<void()> click;
 
     private:
+        void timerCallback() override { stopTimer(); asking = false; repaint(); }
         const EditorView& view;
-        juce::String text;
+        juce::String text, confirmText;
         float size;
-        bool lit = false;
+        bool lit = false, asking = false;
     };
 
     //==========================================================================
@@ -182,8 +189,9 @@ namespace tonnetz::ui
         void refresh();
         void paint (juce::Graphics&) override;
         void resized() override;
-        // The column's size for its contents.
-        juce::Rectangle<int> preferredSize() const;
+        // The column's size for its contents, in at most `maxHeight` (its rows shrink to fit).
+        juce::Rectangle<int> preferredSize (int maxHeight = 10000) const;
+        HudButton& resetButton() noexcept { return reset; }
         void controls (juce::Array<HudControl*>& out);
         // The Info View's key for a point on the column itself (a caption, a gap, the fold).
         juce::String infoKeyAt (juce::Point<int>) const;
@@ -198,7 +206,8 @@ namespace tonnetz::ui
         std::function<void()> layoutChanged;
         juce::OwnedArray<HudControl> owned;
         juce::Array<Line> lines;
-        HudButton fold;
-        static constexpr int lineHeight = 18, captionWidth = 62;
+        HudButton fold, reset;
+        int rowHeight() const;
+        static constexpr int maxRow = 22, minRow = 18, captionWidth = 70;
     };
 }
