@@ -62,6 +62,9 @@ namespace tonnetz::ui
 
         // Takes a new snapshot; true if anything drawn changed.
         bool update (const Inputs&);
+        // Forgets the trail (Reset capture), keeping only the chord made now, so the next move
+        // starts a new trail from it.
+        void clearTrail();
 
         // ---- What is drawn -----------------------------------------------------------------
         ChordView source, generated;

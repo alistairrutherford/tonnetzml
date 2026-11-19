@@ -11,7 +11,7 @@
 //                          (As played; with Alt, Chords). `performExternalDragDropOfFiles`
 //   save…                  a file chooser (Alt-click: Chords)
 //   reset                  forgets the capture (click, then "sure?" within 3 s); an armed take
-//                          carries on, empty
+//                          carries on, empty; the lattice's trail (the red lines) goes too
 #pragma once
 
 #include "EditorNotes.h"
@@ -45,6 +45,8 @@ namespace tonnetz::ui
         juce::Component& dragHandle() noexcept { return handle; }
         juce::Component& saveButton() noexcept { return save; }
         HudButton& resetButton() noexcept { return reset; }
+        // Also called by Reset capture (the editor clears the lattice's trail).
+        std::function<void()> onReset;
 
         void paint (juce::Graphics&) override;
         void resized() override;

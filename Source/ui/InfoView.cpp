@@ -85,8 +85,8 @@ namespace tonnetz::ui
             { "ui.drag", "Drag MIDI",
               "Drag into a track or the Finder: the capture as a MIDI file, as played. Hold Alt for one block chord per change, on the grid." },
             { "ui.resetCapture", "Reset capture",
-              "Forgets the chords captured, the take included; an armed take carries on, empty. Click, then click \"sure?\" "
-              "within 3 seconds." },
+              "Forgets the chords captured, the take included, and the lattice's trail (red lines); an armed take carries on, empty. "
+              "Click, then \"sure?\" within 3 s." },
             { "ui.save", "Save", "Saves the capture as a .mid file (as played; Alt-click: one block chord per change)." },
 
             // ---- The keyboard -----------------------------------------------------------------

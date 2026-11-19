@@ -1988,17 +1988,26 @@ namespace
 
         ed.refreshNow();
         check (! resetCapture.isEnabled(), "Reset capture is dimmed while nothing is captured");
-        for (int i = 0; i < 3; ++i)
+        // Three chords, the editor looking after each (so the lattice's trail has them); the
+        // last is still held at the reset.
+        const auto releaseChord = [&h] (int i)
         {
-            h.process (chordOn ({ 60 + 2 * i, 64 + 2 * i, 67 + 2 * i }));
-            h.runTo (h.pos + MiniHost::at (1.0));
             juce::MidiBuffer off;
             for (int n : { 60 + 2 * i, 64 + 2 * i, 67 + 2 * i })
                 off.addEvent (juce::MidiMessage::noteOff (1, n), 0);
             h.process (off);
+        };
+        for (int i = 0; i < 3; ++i)
+        {
+            h.process (chordOn ({ 60 + 2 * i, 64 + 2 * i, 67 + 2 * i }));
+            h.runTo (h.pos + MiniHost::at (1.0));
+            ed.refreshNow();
+            if (i < 2)
+                releaseChord (i);
         }
         ed.refreshNow();
         const int before = strip.glyphCount();
+        const auto trailBefore = ed.model().trail.size();
         resetCapture.press();
         ed.refreshNow();
         check (before == 3 && resetCapture.isEnabled() && resetCapture.isAsking() && strip.glyphCount() == before,
@@ -2006,12 +2015,22 @@ namespace
         compareImage (editorImage (ed, 760, 520), "reset_capture_asking_paper_760x520", fixtures, output);
         resetCapture.press();
         ed.refreshNow();
-        check (! resetCapture.isAsking() && strip.glyphCount() == 0 && strip.dragOut (false, false) == juce::File() && ! resetCapture.isEnabled(),
-               "a second click forgets the capture: no glyphs, nothing to drag (" + juce::String (strip.glyphCount()) + ")");
-        h.process (chordOn ({ 62, 65, 69 }));
-        h.process();
+        const double resetAt = h.p->captureModel().tapeNow();
+        check (! resetCapture.isAsking() && strip.glyphCount() == 0, "a second click forgets the capture (" + juce::String (strip.glyphCount()) + " glyphs)");
+        check (trailBefore >= 3 && ed.model().trail.size() == 1 && ed.model().generated.present
+                   && std::abs (ed.model().trail.back().a - ed.model().generated.a) < 1e-9 && std::abs (ed.model().trail.back().b - ed.model().generated.b) < 1e-9,
+               "and the lattice's trail: only the chord made now is left (" + juce::String ((int) trailBefore) + " points before)");
+        h.runTo (h.pos + MiniHost::at (1.0));
         ed.refreshNow();
-        check (strip.glyphCount() == 1, "capture goes on after the reset");
+        check (strip.glyphCount() == 1 && std::abs (strip.glyph (0).start - resetAt) < 1e-9,
+               "the chord still held at the reset stays in the capture, from the reset (" + juce::String (strip.glyphCount()) + " glyphs)");
+        releaseChord (2);
+        h.process (chordOn ({ 62, 65, 69 }));
+        h.runTo (h.pos + MiniHost::at (1.0));
+        ed.refreshNow();
+        check (strip.glyphCount() == 2 && ed.model().trail.size() == 2,
+               "capture goes on after the reset (the held chord and the new one), and the trail starts again from there ("
+                   + juce::String (strip.glyphCount()) + " glyphs, " + juce::String ((int) ed.model().trail.size()) + " trail points)");
 
         // Armed: the take carries on, empty.
         set (*h.p, params::capture, true);

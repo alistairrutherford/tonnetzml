@@ -10,7 +10,8 @@
   its caption on the left. Fold it (›) to a slim edge to give the lattice the room; ‹ opens it
   again (saved with the set, as before). The lattice and its word bar now end where the panel begins.
 - **Reset capture:** a *reset* button at the right of the capture strip forgets the chords captured,
-  the take included. An armed take carries on, empty; notes still sounding stay in the capture from
+  the take included, and clears the lattice's trail (the fading red line through the last chords),
+  keeping only the chord made now so the next move starts a new trail. An armed take carries on, empty; notes still sounding stay in the capture from
   the reset. Dimmed while nothing is captured.
 - **Reset settings:** a *reset* button on the settings panel's title line puts the panel's 18 settings back to their defaults (Out, the channels, voicing, gather, Orbit,
   Walk, latch, the operator keys, the held key, In key, Preview tone, the test rig). Mode, Key, Slot,

@@ -31,6 +31,8 @@ namespace tonnetz
         head.setComponentID ("area.header");
         addMouseListener (this, true);     // hovering over any child updates the Info View
         // Free ops from the lattice (Phase 6) go where the word bar's do.
+        // Reset capture clears the lattice's trail too.
+        strip.onReset = [this] { picture.clearTrail(); lattice.repaint(); };
         lattice.canEditWord = [this] { return word.editable(); };
         lattice.appendOp = [this] (const Op& op) { word.appendOp (op); };
         lattice.onFocusWanted = [this]

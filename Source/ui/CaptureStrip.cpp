@@ -55,7 +55,7 @@ namespace tonnetz::ui
           sourceToggle (paramOf (p, params::captureSource), p.editorView(), {}, "+ source"),
           handle (*this),
           save (p.editorView(), utf8 ("save\xe2\x80\xa6"), [this] { saveAs (juce::ModifierKeys::currentModifiers.isAltDown()); }, 13.5f),
-          reset (p.editorView(), "reset", [this] { processor.clearCapture(); refresh(); }, 13.5f)
+          reset (p.editorView(), "reset", [this] { processor.clearCapture(); if (onReset) onReset(); refresh(); }, 13.5f)
     {
         captureToggle.setComponentID (params::capture);
         sourceToggle.setComponentID (params::captureSource);
@@ -63,7 +63,7 @@ namespace tonnetz::ui
         save.setComponentID ("ui.save");
         reset.setComponentID ("ui.resetCapture");
         reset.setConfirm ("sure?");
-        reset.setTooltip ("Reset capture: forgets the chords captured, the take included (click again to confirm).");
+        reset.setTooltip ("Reset capture: forgets the chords captured, the take included, and the lattice's trail (click again to confirm).");
         captureToggle.setTooltip ("Capture: arm a take. Everything played from now until it is disarmed is kept (the strip "
                                   "shows it); with it off the strip shows the last 64 bars, always kept.");
         sourceToggle.setTooltip ("Capture the source notes too (what was played into TonnetzML), on their own track.");

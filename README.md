@@ -62,8 +62,8 @@ hovering a ghost neighbour auditions it.
 - **The capture strip**: every chord played, as a glyph. **⦿ capture** arms a take (otherwise the
   last 64 bars are kept anyway); click a glyph to play that chord again; drag **⇩ drag MIDI** into a
   track or the Finder for a `.mid` (hold Alt for the *Chords* version, one block chord per change on
-  the sixteenth grid); **save…** writes one; **reset** forgets the capture (an armed take carries
-  on, empty).
+  the sixteenth grid); **save…** writes one; **reset** forgets the capture and the lattice's red
+  trail (an armed take carries on, empty).
 - **The keyboard strip** shows both inks and the operator zone; click to play (*sticky* holds keys
   until clicked again), or use the computer keyboard (Z… and Q… rows, ‹ › for the octave).
 - **The settings panel**, docked to the right of the lattice: the other settings as click-to-cycle

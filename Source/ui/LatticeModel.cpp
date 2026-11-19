@@ -173,6 +173,13 @@ namespace tonnetz::ui
         return changed;
     }
 
+    void LatticeModel::clearTrail()
+    {
+        if (trail.size() > 1)
+            trail.erase (trail.begin(), trail.end() - 1);
+        lastSignature.clear();          // drawn again at the next update
+    }
+
     void LatticeModel::rebuildShapes (const Inputs& in)
     {
         const auto& st = in.status;
