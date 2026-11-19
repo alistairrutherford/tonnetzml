@@ -4,7 +4,7 @@
 ones you play by moving them on the Tonnetz, the lattice of fifths and thirds, and sends them out
 as MIDI. The plan, with the theory, the design and the status of each phase, is [PLAN.md](PLAN.md).
 
-**Version 1.0.1** (2026-11-18). What's in it and the known limits: [CHANGELOG.md](CHANGELOG.md).
+**Version 1.0.2** (2026-11-19). What's in it and the known limits: [CHANGELOG.md](CHANGELOG.md).
 
 ![The editor in Walk: Cmaj7 (teal) through P·L to A♭maj7 (vermilion) in C major, with the word bar, the capture strip, the keyboard and the Info View along the bottom](docs/editor.png)
 

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.0.2 (2026-11-19)
 
 ### Added
 
@@ -11,17 +11,17 @@
   again (saved with the set, as before). The lattice and its word bar now end where the panel begins.
 - **Reset capture:** a *reset* button at the right of the capture strip forgets the chords captured,
   the take included, and clears the lattice's trail (the fading red line through the last chords),
-  keeping only the chord made now so the next move starts a new trail. An armed take carries on, empty; notes still sounding stay in the capture from
-  the reset. Dimmed while nothing is captured.
-- **Reset settings:** a *reset* button on the settings panel's title line puts the panel's 18 settings back to their defaults (Out, the channels, voicing, gather, Orbit,
-  Walk, latch, the operator keys, the held key, In key, Preview tone, the test rig). Mode, Key, Slot,
+  keeping only the chord made now so the next move starts a new trail. An armed take carries on,
+  empty; notes still sounding stay in the capture from the reset. Dimmed while nothing is captured.
+- **Reset settings:** a *reset* button on the settings panel's title line puts the panel's 18
+  settings back to their defaults (Out, the channels, voicing, gather, Orbit, Walk, latch, the operator keys, the held key, In key, Preview tone, the test rig). Mode, Key, Slot,
   Enable, the capture toggles, the slots' words and `W` are left alone.
 - Both reset buttons ask first: a click shows *sure?* in vermilion, and a second click within 3
   seconds acts. Both have Info View entries.
 
 ### Changed
 
-- **Bigger, clearer labels:** the settings column, the header's controls, the word bar, the
+- **Bigger, clearer labels:** the settings, the header's controls, the word bar, the
   capture strip, the keyboard strip and the lattice's hints are about 1.5 points larger, and the
   faint caption ink is darker in both themes. The capture strip and the keyboard strip's bar are a
   few pixels taller, so the lattice gives up 10 px.
