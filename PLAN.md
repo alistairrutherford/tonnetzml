@@ -419,7 +419,10 @@ capture strip's right, after save…) calls `TonnetzProcessor::clearCapture` →
 the last 64 bars and the take go, notes still sounding are kept from the reset (their note-offs
 still land), an armed take carries on empty; dimmed while nothing is captured. It also clears the
 lattice's trail (`LatticeModel::clearTrail`, through `CaptureStrip::onReset`), keeping only the
-chord made now, so the red line starts again from there. **Reset settings**
+chord made now, so the red line starts again from there. *After 1.0.2:* Escape and the lattice's
+Release clear the trail too (`LatticeView::onLetGo`, `TonnetzEditor::keyPressed`); `clearTrail`
+empties it and `LatticeModel::update` (no longer `rebuildShapes`) adds the chord sounding, so a
+cleared trail restarts at once. Snapshot section *let go clears the trail*. **Reset settings**
 (`ui.resetSettings`, on the settings panel's title line) calls
 `TonnetzProcessor::resetSettings`: each of `settingsParameterIDs()` (exactly the column's 18
 parameters, checked by the snapshot app) to its default as a host gesture; Mode, Key, Slot, Enable,

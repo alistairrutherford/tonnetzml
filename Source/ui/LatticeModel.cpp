@@ -151,6 +151,16 @@ namespace tonnetz::ui
             rebuildGhosts (in);
             rebuildCycle (in);
         }
+        // The trail: the chord made, each time it moves (here, not in rebuildShapes, so a cleared
+        // trail starts again from the chord sounding at the next update).
+        if (generated.present
+            && (trail.empty() || trail.back().mask != generated.chord.mask
+                || std::abs (trail.back().a - generated.a) > 1e-9 || std::abs (trail.back().b - generated.b) > 1e-9))
+        {
+            trail.push_back ({ generated.a, generated.b, generated.chord.mask });
+            if ((int) trail.size() > maxTrail)
+                trail.erase (trail.begin());
+        }
         inKeyBits = generated.present ? opsInKey (generated.chord, key) : 0;
         for (auto& g : ghosts)
         {
@@ -175,8 +185,8 @@ namespace tonnetz::ui
 
     void LatticeModel::clearTrail()
     {
-        if (trail.size() > 1)
-            trail.erase (trail.begin(), trail.end() - 1);
+        // All of it: the next update starts it again from the chord made then, if one sounds.
+        trail.clear();
         lastSignature.clear();          // drawn again at the next update
     }
 
@@ -226,14 +236,6 @@ namespace tonnetz::ui
             else
                 generated.shape = embed (st.generated.mask, &source.shape);
             centreOf (generated.shape, generated.a, generated.b);
-
-            if (trail.empty() || trail.back().mask != st.generated.mask
-                || std::abs (trail.back().a - generated.a) > 1e-9 || std::abs (trail.back().b - generated.b) > 1e-9)
-            {
-                trail.push_back ({ generated.a, generated.b, st.generated.mask });
-                if ((int) trail.size() > maxTrail)
-                    trail.erase (trail.begin());
-            }
         }
     }
 

@@ -62,8 +62,8 @@ namespace tonnetz::ui
 
         // Takes a new snapshot; true if anything drawn changed.
         bool update (const Inputs&);
-        // Forgets the trail (Reset capture), keeping only the chord made now, so the next move
-        // starts a new trail from it.
+        // Forgets the trail (Reset capture, Escape, the lattice's Release): the next update
+        // starts it again from the chord made then, if one sounds.
         void clearTrail();
 
         // ---- What is drawn -----------------------------------------------------------------

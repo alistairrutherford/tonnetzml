@@ -51,7 +51,9 @@ hovering a ghost neighbour auditions it.
 
 - **The lattice** is the window. Click a triangle to play its triad, drag to glide, shift-click
   nodes to build any chord. Right-, ⌘- or middle-drag (or two fingers) pans; the wheel or a pinch
-  zooms; double-click recentres. The source chord is teal, the generated one vermilion.
+  zooms; double-click recentres. The source chord is teal, the generated one vermilion; a fading
+  red trail joins the last chords made. Escape (or **release**) lets go of what the mouse holds and
+  clears the trail.
 - **Ghost neighbours** around the generated chord name the ops one step away; hover to hear
   (with Preview tone), click to add (Walk, Explore).
 - **Free ops** on the generated chord: click one of its nodes to **Pivot** on it, the middle of one

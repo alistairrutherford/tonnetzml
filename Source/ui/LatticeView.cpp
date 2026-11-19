@@ -25,7 +25,7 @@ namespace tonnetz::ui
                   followChords (false);
               repaint();
           }, 13.0f),
-          release (p.editorView(), "release", [this] { releaseLattice(); repaint(); }, 13.0f)
+          release (p.editorView(), "release", [this] { releaseLattice(); if (onLetGo) onLetGo(); repaint(); }, 13.0f)
     {
         setOpaque (true);
         follow.setComponentID ("ui.follow");

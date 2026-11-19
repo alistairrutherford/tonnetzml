@@ -49,6 +49,9 @@ namespace tonnetz::ui
         void glideTo (const Triangle&);
         void toggleNode (Vec node);
         void releaseLattice();
+        // The Release button (and Escape, in the editor): let go and clear the trail (the editor
+        // sets it).
+        std::function<void()> onLetGo;
         // Holds these exact pitches as the lattice's set (the capture strip's recall, Phase 5).
         void holdSet (const std::vector<int>& pitches);
         int ghostAt (juce::Point<float>) const;          // index into the model's ghosts, or -1
@@ -56,6 +59,7 @@ namespace tonnetz::ui
         juce::Point<float> ghostChipCentre (int index) const;
         bool ghostsClickable() const;
         std::optional<Triangle> heldTriangle() const { return held; }
+        HudButton& releaseButton() noexcept { return release; }
 
         // Free ops on the generated chord (Phase 6): click one of its nodes to Pivot on it, the
         // middle of one of its edges to Flip through it, a node across an edge (marked +) to

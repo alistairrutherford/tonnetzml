@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Escape left the red trail behind:** Escape (and the lattice's *release*) let go of the chord
+  but left the trail, the fading red line through the last chords, on the grid. Both now clear it;
+  a chord still sounding (from a keyboard, say) starts a new trail, with no line back to the old
+  chords.
+- After a reset, the trail now starts again from the chord sounding at once, not only when the
+  chord next changes.
+
 ## 1.0.2 (2026-11-19)
 
 ### Added

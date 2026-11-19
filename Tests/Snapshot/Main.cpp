@@ -2127,6 +2127,63 @@ namespace
         }
     }
 
+    // 1.0.3: Escape (and the lattice's Release) let go and clear the trail, so no red line is left.
+    void testLetGoClearsTrail()
+    {
+        std::cout << "let go clears the trail" << std::endl;
+        MiniHost h;
+        setPlain (*h.p, params::gatherMs, 0.0f);
+        h.process();                                 // the first block takes prepareToPlay's reset
+        std::unique_ptr<juce::AudioProcessorEditor> e (h.p->createEditor());
+        auto& ed = editorOf (e);
+        ed.freezeAnimation (true);
+        auto& lat = ed.latticeView();
+        // Three chords held from the lattice one after another: a trail of three.
+        const auto walk = [&]
+        {
+            for (const auto& chord : { std::vector<int> { 60, 64, 67 }, std::vector<int> { 60, 64, 69 }, std::vector<int> { 60, 65, 69 } })
+            {
+                lat.holdSet (chord);
+                h.process();
+                h.process();
+                ed.refreshNow();
+            }
+        };
+        walk();
+        const auto before = ed.model().trail.size();
+        ed.keyPressed (juce::KeyPress (juce::KeyPress::escapeKey));
+        h.process();
+        h.process();
+        ed.refreshNow();
+        check (before == 3 && ed.model().trail.empty() && ! ed.model().generated.present && ! ed.editorNotes().any (ui::EditorNotes::lattice),
+               "Escape lets go and clears the trail: no red line left (" + juce::String ((int) before) + " points before, "
+                   + juce::String ((int) ed.model().trail.size()) + " after, generated " + juce::String ((int) ed.model().generated.present)
+                   + ", lattice notes " + juce::String ((int) ed.editorNotes().any (ui::EditorNotes::lattice)) + ")");
+        lat.holdSet ({ 62, 65, 69 });
+        h.process();
+        h.process();
+        ed.refreshNow();
+        check (ed.model().trail.size() == 1, "the next chord starts a new trail, with no line back to the old ones");
+
+        walk();
+        lat.releaseButton().press();
+        h.process();
+        h.process();
+        ed.refreshNow();
+        check (ed.model().trail.empty() && ! ed.model().generated.present, "the lattice's Release clears it too");
+
+        // A chord still sounding from the host keeps its place: the trail starts again from it.
+        walk();
+        h.process (chordOn ({ 55, 59, 62 }));
+        h.process();
+        ed.keyPressed (juce::KeyPress (juce::KeyPress::escapeKey));
+        h.process();
+        h.process();
+        ed.refreshNow();
+        check (ed.model().trail.size() == 1 && ed.model().generated.present,
+               "with a host chord still held, Escape leaves only that chord on the trail (" + juce::String ((int) ed.model().trail.size()) + ")");
+    }
+
     void testInfoView (const juce::File& fixtures, const juce::File& output)
     {
         std::cout << "info view" << std::endl;
@@ -2230,6 +2287,7 @@ int main (int argc, char* argv[])
     testFinish (fixtures, output);
     testInfoView (fixtures, output);
     testResets (fixtures, output);
+    testLetGoClearsTrail();
     testThrough();
     testRig (output);
     testParams();

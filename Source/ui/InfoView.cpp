@@ -28,7 +28,7 @@ namespace tonnetz::ui
               "Click a triangle to play it, drag to glide, shift-click nodes for any set. Ghosts: one op away. "
               "Right- or \xe2\x8c\x98-drag pans, the wheel zooms, double-click recentres." },
             { "ui.follow", "Follow", "On: the view eases to keep the chord played and the chord made in sight." },
-            { "ui.latticeRelease", "Release", "Lets go of the triangle or set the lattice holds (Sticky)." },
+            { "ui.latticeRelease", "Release", "Lets go of the triangle or set the lattice holds (Sticky), and clears the trail (the red line). Escape does too." },
             { "ui.settings", "Settings", "Folds this panel to a slim edge (\xe2\x80\xba), or opens it again (\xe2\x80\xb9), giving the lattice the room." },
             { "ui.resetSettings", "Reset settings",
               "Puts every setting in this panel back to its default. Click, then click \"sure?\" within 3 seconds. "

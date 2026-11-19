@@ -33,6 +33,7 @@ namespace tonnetz
         // Free ops from the lattice (Phase 6) go where the word bar's do.
         // Reset capture clears the lattice's trail too.
         strip.onReset = [this] { picture.clearTrail(); lattice.repaint(); };
+        lattice.onLetGo = [this] { picture.clearTrail(); lattice.repaint(); };
         lattice.canEditWord = [this] { return word.editable(); };
         lattice.appendOp = [this] (const Op& op) { word.appendOp (op); };
         lattice.onFocusWanted = [this]
@@ -201,8 +202,11 @@ namespace tonnetz
     {
         if (k == juce::KeyPress::escapeKey)
         {
+            // Lets go of everything the mouse holds, and the trail (the red line) goes with it.
             lattice.releaseLattice();
             notes.releaseHolder (ui::EditorNotes::mouseKeys);
+            picture.clearTrail();
+            lattice.repaint();
             if (auto* pal = word.palette())
                 pal->setVisible (false);
             keyboard.refresh();
