@@ -72,7 +72,7 @@ namespace tonnetz::ui
         if (isMouseOver())
         {
             const float w = textWidth (font(), valueText());
-            g.fillRect (r.getX(), r.getCentreY() + 8.0f, w, 1.0f);
+            g.fillRect (r.getX(), r.getCentreY() + 9.0f, w, 1.0f);
         }
     }
 
@@ -260,13 +260,13 @@ namespace tonnetz::ui
         {
             const auto r = optionBounds (i).reduced (gap * 0.5f, 0.0f);
             const bool on = i == current;
-            g.setFont (Ink::ui (14.5f, on));
+            g.setFont (Ink::ui (15.5f, on));
             g.setColour (on ? k.text : (i == hover ? k.generated : k.textFaint));
             g.drawText (labels[i], r.withWidth (r.getWidth() + 8.0f), juce::Justification::centredLeft, false);
             if (on)
             {
                 g.setColour (k.generated);
-                g.fillRect (r.getX(), r.getCentreY() + 8.0f, textWidth (Ink::ui (14.5f, true), labels[i]), 1.5f);
+                g.fillRect (r.getX(), r.getCentreY() + 9.0f, textWidth (Ink::ui (15.5f, true), labels[i]), 1.5f);
             }
             if (marked && marked (i) && ! on)
             {
@@ -320,14 +320,14 @@ namespace tonnetz::ui
         return glyph() + " " + t;
     }
 
-    int KeyBadge::preferredWidth() const { return (int) std::ceil (textWidth (Ink::ui (14.5f, true), valueText()) + 6.0f); }
+    int KeyBadge::preferredWidth() const { return (int) std::ceil (textWidth (Ink::ui (15.5f, true), valueText()) + 6.0f); }
 
     void KeyBadge::paint (juce::Graphics& g)
     {
         const auto& k = ink();
         const int mode = (int) std::lround (plain());
         const bool tentative = mode == (int) KeyMode::Listen && (! model.guess.has() || model.guess.state != GuessState::Confident);
-        g.setFont (Ink::ui (14.5f, mode != (int) KeyMode::Off && ! tentative));
+        g.setFont (Ink::ui (15.5f, mode != (int) KeyMode::Off && ! tentative));
         g.setColour (isMouseOver() ? k.generated : (mode == (int) KeyMode::Off || tentative ? k.textFaint : k.text));
         g.drawText (valueText(), getLocalBounds().toFloat(), juce::Justification::centredLeft, false);
     }
@@ -469,7 +469,7 @@ namespace tonnetz::ui
     void Header::resized()
     {
         auto r = getLocalBounds().reduced (14, 0);
-        r.removeFromLeft (98);                                   // the name
+        r.removeFromLeft (104);                                  // the name
         enable.setBounds (r.removeFromLeft (enable.preferredWidth() + 6));
         r.removeFromLeft (10);
         mode.setBounds (r.removeFromLeft (mode.preferredWidth() + 4));
@@ -484,18 +484,18 @@ namespace tonnetz::ui
     {
         const auto& k = Ink::of (processor.editorView().dark);
         g.setColour (k.text);
-        g.setFont (Ink::title (21.0f));
-        g.drawText ("TonnetzML", getLocalBounds().reduced (14, 0).withWidth (100), juce::Justification::centredLeft, false);
+        g.setFont (Ink::title (22.0f));
+        g.drawText ("TonnetzML", getLocalBounds().reduced (14, 0).withWidth (106), juce::Justification::centredLeft, false);
 
         // The sentence: source in teal, the word in ink, the result in vermilion.
-        g.setFont (Ink::note (14.5f));
+        g.setFont (Ink::note (16.0f));
         const auto arrow = utf8 (" \xe2\x94\x80\xe2\x94\x80");
         const int split = sentence.indexOf (arrow);
         auto area = sentenceArea.toFloat();
         if (sentence.isEmpty())
         {
             g.setColour (k.textFaint);
-            g.setFont (Ink::ui (13.5f));
+            g.setFont (Ink::ui (14.5f));
             g.drawText (utf8 ("play a chord, or click a triangle"), area, juce::Justification::centredRight, true);
             return;
         }
@@ -505,11 +505,11 @@ namespace tonnetz::ui
         const auto mid = head >= 0 ? rest.substring (0, head + 2) : rest;
         const auto gen = head >= 0 ? rest.substring (head + 2) : juce::String();
         // Shrunk to fit (down to 11 points), then cut at the right.
-        auto font = Ink::note (14.5f);
+        auto font = Ink::note (16.0f);
         float total = textWidth (font, src) + textWidth (font, mid) + textWidth (font, gen);
         if (total > area.getWidth())
         {
-            font = Ink::note (juce::jmax (11.0f, 14.5f * area.getWidth() / total));
+            font = Ink::note (juce::jmax (12.0f, 16.0f * area.getWidth() / total));
             total = textWidth (font, src) + textWidth (font, mid) + textWidth (font, gen);
         }
         g.setFont (font);
@@ -536,8 +536,8 @@ namespace tonnetz::ui
               refresh();
               if (layoutChanged)
                   layoutChanged();
-          }, 19.0f),
-          reset (p.editorView(), "reset", [this] { processor.resetSettings(); refresh(); }, 13.0f)
+          }, 20.0f),
+          reset (p.editorView(), "reset", [this] { processor.resetSettings(); refresh(); }, 14.0f)
     {
         const auto& v = p.editorView();
         auto add = [this] (HudControl* c) { owned.add (c); addAndMakeVisible (c); return c; };
@@ -568,6 +568,7 @@ namespace tonnetz::ui
         reset.setTooltip ("Reset settings: every setting in this panel back to its default (click again to confirm).");
         addAndMakeVisible (reset);
         refresh();
+        built = true;
     }
 
     int Settings::rowHeight() const
@@ -627,7 +628,7 @@ namespace tonnetz::ui
                 widthChanged = widthChanged || (shown && std::abs (c->getWidth() - c->preferredWidth()) > 0);
             }
         widthChanged = widthChanged || getWidth() != preferredWidth();
-        if (widthChanged && layoutChanged)
+        if (widthChanged && layoutChanged && built)
             layoutChanged();
     }
 
@@ -671,9 +672,9 @@ namespace tonnetz::ui
         auto r = content();
         const int h = rowHeight();
         g.setColour (k.text);
-        g.setFont (Ink::ui (13.0f, true));
+        g.setFont (Ink::ui (14.0f, true));
         g.drawText ("settings", r.removeFromTop (h), juce::Justification::centredLeft, false);
-        g.setFont (Ink::ui (13.0f));
+        g.setFont (Ink::ui (14.0f));
         g.setColour (k.textFaint);
         for (const auto& line : lines)
             g.drawText (line.caption, r.removeFromTop (h).withWidth (captionWidth - 6), juce::Justification::centredLeft, false);

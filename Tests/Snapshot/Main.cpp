@@ -72,6 +72,8 @@
 #include <iostream>
 #include <map>
 #include <set>
+#include <cstring>
+#include <new>
 #include <tuple>
 #include <pthread.h>
 
@@ -2133,7 +2135,6 @@ namespace
         std::cout << "let go clears the trail" << std::endl;
         MiniHost h;
         setPlain (*h.p, params::gatherMs, 0.0f);
-        h.process();                                 // the first block takes prepareToPlay's reset
         std::unique_ptr<juce::AudioProcessorEditor> e (h.p->createEditor());
         auto& ed = editorOf (e);
         ed.freezeAnimation (true);
@@ -2182,6 +2183,119 @@ namespace
         ed.refreshNow();
         check (ed.model().trail.size() == 1 && ed.model().generated.present,
                "with a host chord still held, Escape leaves only that chord on the trail (" + juce::String ((int) ed.model().trail.size()) + ")");
+    }
+
+    // After 1.0.3: a release (the first block's reset, a transport stop) forgets only the editor
+    // notes it ended; notes the editor sent after it still sound and stay held, so no note is
+    // left sounding with the editor unaware of it.
+    // After 1.0.3: the settings panel never calls back into the editor while it is being built
+    // (the editor's members after it aren't constructed yet; a layout then once crashed), but
+    // does afterwards when its width changes (fold).
+    void testSettingsBuildQuietly()
+    {
+        std::cout << "settings panel built quietly" << std::endl;
+        TonnetzProcessor p;
+        int calls = 0;
+        ui::Settings panel (p, [&calls] { ++calls; });
+        check (calls == 0, "constructing the settings panel calls no layout back (" + juce::String (calls) + ")");
+        panel.setSize (panel.preferredWidth(), 400);
+        p.editorView().showSettings = false;
+        panel.refresh();
+        check (calls >= 1, "folding it afterwards does (" + juce::String (calls) + ")");
+        p.editorView().showSettings = true;
+    }
+
+    void testEditorNotesAcrossReleases()
+    {
+        std::cout << "editor notes across releases" << std::endl;
+        const auto sourceKeys = [] (MiniHost& host)
+        {
+            std::set<int> keys;
+            const auto st = host.p->getEngineStatus();
+            for (int n = 0; n < 128; ++n)
+                if (st.sourceVelocity[(size_t) n] != 0)
+                    keys.insert (n);
+            return keys;
+        };
+        const auto heldBy = [] (TonnetzEditor& ed)
+        {
+            std::set<int> keys;
+            for (int n = 0; n < 128; ++n)
+                if (ed.editorNotes().holds (n))
+                    keys.insert (n);
+            return keys;
+        };
+        const auto text = [] (const std::set<int>& keys)
+        {
+            juce::StringArray a;
+            for (int n : keys)
+                a.add (juce::String (n));
+            return a.joinIntoString (" ");
+        };
+
+        // Pressed before the host's first block (which carries out prepareToPlay's reset).
+        {
+            MiniHost h;
+            setPlain (*h.p, params::gatherMs, 0.0f);
+            std::unique_ptr<juce::AudioProcessorEditor> e (h.p->createEditor());
+            auto& ed = editorOf (e);
+            ed.freezeAnimation (true);
+            ed.latticeView().holdSet ({ 60, 64, 67 });
+            h.process();
+            h.process();
+            ed.refreshNow();
+            const auto held = heldBy (ed), sounding = sourceKeys (h);
+            check (held == std::set<int> { 60, 64, 67 } && sounding == held && ed.latticeView().isHoldingSet(),
+                   "notes pressed before the first block survive its reset: the editor still holds what sounds ("
+                       + text (held) + " / " + text (sounding) + ")");
+            ed.keyPressed (juce::KeyPress (juce::KeyPress::escapeKey));
+            h.process();
+            h.process();
+            ed.refreshNow();
+            check (sourceKeys (h).empty() && heldBy (ed).empty() && h.sounding() == 0, "and Escape lets them go: nothing left sounding");
+        }
+
+        // Pressed in the same block as a transport stop: struck after the stop, so they sound on.
+        {
+            MiniHost h;
+            setPlain (*h.p, params::gatherMs, 0.0f);
+            h.process();
+            std::unique_ptr<juce::AudioProcessorEditor> e (h.p->createEditor());
+            auto& ed = editorOf (e);
+            ed.freezeAnimation (true);
+            ed.latticeView().holdSet ({ 60, 64, 67 });
+            h.head.playing = true;
+            h.process();
+            h.process();
+            ed.refreshNow();
+            ed.latticeView().releaseLattice();
+            ed.latticeView().holdSet ({ 62, 65, 69 });
+            h.head.playing = false;              // the stop and the new chord in one block
+            h.process();
+            h.process();
+            ed.refreshNow();
+            const auto held = heldBy (ed), sounding = sourceKeys (h);
+            check (held == std::set<int> { 62, 65, 69 } && sounding == held,
+                   "a chord pressed in the block of a stop sounds on and the editor keeps it (" + text (held) + " / " + text (sounding) + ")");
+            ed.keyPressed (juce::KeyPress (juce::KeyPress::escapeKey));
+            h.process();
+            h.process();
+            ed.refreshNow();
+            check (sourceKeys (h).empty() && heldBy (ed).empty() && h.sounding() == 0, "and is let go cleanly");
+
+            // Pressed well before a stop: the stop ends it and the editor forgets it.
+            ed.latticeView().holdSet ({ 57, 60, 64 });
+            h.head.playing = true;
+            h.process();
+            h.process();
+            ed.refreshNow();
+            const bool wasHeld = heldBy (ed) == std::set<int> { 57, 60, 64 };
+            h.head.playing = false;
+            h.process();
+            ed.refreshNow();
+            check (wasHeld && heldBy (ed).empty() && sourceKeys (h).empty() && ! ed.latticeView().isHoldingSet(),
+                   "a chord held before a stop is ended by it and forgotten");
+        }
     }
 
     void testInfoView (const juce::File& fixtures, const juce::File& output)
@@ -2288,6 +2402,8 @@ int main (int argc, char* argv[])
     testInfoView (fixtures, output);
     testResets (fixtures, output);
     testLetGoClearsTrail();
+    testEditorNotesAcrossReleases();
+    testSettingsBuildQuietly();
     testThrough();
     testRig (output);
     testParams();

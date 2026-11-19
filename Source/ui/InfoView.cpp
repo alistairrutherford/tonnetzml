@@ -162,12 +162,12 @@ namespace tonnetz::ui
         s.setLineSpacing (1.0f);
         if (title.isNotEmpty())
         {
-            s.append (title + "   ", Ink::ui (13.0f, true), k.text);
-            s.append (text, Ink::ui (12.5f), k.text.withAlpha (0.82f));
+            s.append (title + "   ", Ink::ui (14.0f, true), k.text);
+            s.append (text, Ink::ui (13.5f), k.text.withAlpha (0.82f));
         }
         else
         {
-            s.append (text, Ink::ui (12.5f), k.textFaint);
+            s.append (text, Ink::ui (13.5f), k.textFaint);
         }
         auto area = getLocalBounds().toFloat().reduced (14.0f, 0.0f).withTrimmedTop (6.0f).withTrimmedBottom (3.0f);
         juce::TextLayout layout;

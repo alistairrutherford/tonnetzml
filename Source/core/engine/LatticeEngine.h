@@ -169,6 +169,7 @@ namespace tonnetz
         void releaseAll (int sample, Out& out) noexcept
         {
             ++releaseCount;
+            lastRelease = sample;
             tracker.releaseAll (sample, out);
             for (int ch = 0; ch < 16; ++ch)
                 for (int n = 0; n < 128; ++n)
@@ -371,6 +372,9 @@ namespace tonnetz
         // How many times everything was ended (stop, Enable off, releaseAll): the editor forgets
         // the keys it holds when this moves, since the engine has forgotten them.
         uint32_t releases() const noexcept { return releaseCount; }
+        // The sample, in its block, of the last release (keys at or after it in that block
+        // were struck after it and still sound).
+        int lastReleaseSample() const noexcept { return lastRelease; }
 
     private:
         static constexpr int never = 1 << 30;
@@ -903,6 +907,7 @@ namespace tonnetz
         int genLowest = -1;
         Chord genChord;                                  // W(chord) as last evaluated
         uint32_t releaseCount = 0;
+        int lastRelease = 0;
 
         // The editor's commands, taken at the next block's start.
         std::array<int8_t, 64> pendingOps {};

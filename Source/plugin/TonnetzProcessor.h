@@ -86,6 +86,10 @@ namespace tonnetz
         std::array<uint8_t, 128> sourceVelocity {}, generatedVelocity {};
         Chord source, generated;
         uint32_t releases = 0;
+        // After 1.0.3: the last editor note (its seq, EditorCommand::seq) the latest release
+        // ended. Notes the editor sent after it (in the same block, after the release, or still
+        // queued) still sound: the editor keeps those (EditorNotes::forgetThrough).
+        uint32_t releasedThrough = 0;
     };
 
     // The editor's view (PLAN.md §5): kept by the processor so it outlives the editor window.
@@ -166,7 +170,18 @@ namespace tonnetz
         // The editor (Phase 4). Message thread only (one producer).
 
         // Queues a command for the audio thread (EditorCommands.h): false if the queue is full.
-        bool sendEditorCommand (const EditorCommand& c) noexcept { return editorCommands.push (c); }
+        // Message thread. Notes are numbered (EditorCommand::seq) as they go; `seq` (if given)
+        // gets the number, 0 if the queue was full.
+        bool sendEditorCommand (const EditorCommand& c, uint32_t* seq = nullptr) noexcept
+        {
+            auto numbered = c;
+            if (c.type == EditorCommandType::NoteOn || c.type == EditorCommandType::NoteOff)
+                numbered.seq = ++editorSeqSent;
+            const bool ok = editorCommands.push (numbered);
+            if (seq != nullptr)
+                *seq = ok ? numbered.seq : 0;
+            return ok;
+        }
         EditorView& editorView() noexcept { return view; }
         // Bumped when a restored state replaced the view (the open editor re-reads it).
         uint32_t editorViewRestores() const noexcept { return viewRestores; }
@@ -272,6 +287,9 @@ namespace tonnetz
 
         // Message thread → audio thread.
         EditorCommandFifo editorCommands;
+        uint32_t editorSeqSent = 0;                     // message thread
+        uint32_t editorSeqTaken = 0;                    // audio thread: the last note given to the engine
+        std::array<uint32_t, 1024> editorSeqAt {};      // audio thread: this block's editor notes, by sample
         EditorView view;                    // message thread
         // The view for a state saved from another thread, and one restored from another thread
         // (both under viewLock; the timer keeps the one and applies the other).

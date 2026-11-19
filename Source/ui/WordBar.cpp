@@ -7,7 +7,7 @@ namespace tonnetz::ui
     {
         juce::String utf8 (const char* s) { return juce::String::fromUTF8 (s); }
         float textWidth (const juce::Font& f, const juce::String& s) { return juce::GlyphArrangement::getStringWidth (f, s); }
-        juce::Font chipFont() { return Ink::ui (13.5f, true); }
+        juce::Font chipFont() { return Ink::ui (15.0f, true); }
 
         juce::String opText (const Op& op)
         {
@@ -16,7 +16,7 @@ namespace tonnetz::ui
             return LatticeModel::pretty (printWord (w).c_str()).replace ("-", utf8 ("\xe2\x88\x92"));
         }
 
-        constexpr int captionW = 46;
+        constexpr int captionW = 52;
     }
 
     //==========================================================================
@@ -92,7 +92,7 @@ namespace tonnetz::ui
             g.setColour (i == hover ? k.generated : k.ghost);
             g.drawEllipse (r, 1.3f);
             g.setColour (i == hover ? k.onInk : k.text);
-            g.setFont (Ink::ui (items[(size_t) i].label.length() > 2 ? 10.5f : 13.5f, true));
+            g.setFont (Ink::ui (items[(size_t) i].label.length() > 2 ? 12.0f : 15.0f, true));
             g.drawText (items[(size_t) i].label, r.expanded (4.0f, 0.0f), juce::Justification::centred, false);
         }
     }
@@ -101,9 +101,9 @@ namespace tonnetz::ui
     WordBar::WordBar (TonnetzProcessor& p, const LatticeModel& m)
         : processor (p), model (m),
           slots (*p.getState().getParameter (params::slot), p.editorView(), "slot", { "A", "B", "C", "D", "E", "F", "G", "H" }, 7.0f),
-          plus (p.editorView(), "+", [this] { openPalette(); }, 17.0f),
-          undoButton (p.editorView(), utf8 ("\xe2\x8c\xab"), [this] { undo(); }, 15.0f),
-          homeButton (p.editorView(), utf8 ("\xe2\x8c\x82"), [this] { home(); }, 15.0f)
+          plus (p.editorView(), "+", [this] { openPalette(); }, 19.0f),
+          undoButton (p.editorView(), utf8 ("\xe2\x8c\xab"), [this] { undo(); }, 16.5f),
+          homeButton (p.editorView(), utf8 ("\xe2\x8c\x82"), [this] { home(); }, 16.5f)
     {
         slots.marked = [this] (int i) { return ! processor.getSlotWord (i).empty(); };
         addAndMakeVisible (slots);
@@ -321,7 +321,7 @@ namespace tonnetz::ui
 
     juce::Rectangle<float> WordBar::chipsArea() const
     {
-        return getLocalBounds().toFloat().withTrimmedLeft ((float) captionW + 8.0f).withTrimmedTop (4.0f).withHeight (26.0f);
+        return getLocalBounds().toFloat().withTrimmedLeft ((float) captionW + 8.0f).withTrimmedTop (4.0f).withHeight (28.0f);
     }
 
     juce::Rectangle<float> WordBar::chipBounds (int index) const
@@ -352,10 +352,10 @@ namespace tonnetz::ui
         const Word w = shownWord();
         const auto end = chipBounds (w.size);
         const int y = (int) chipsArea().getY();
-        plus.setBounds ((int) end.getX() + 2, y, 24, 26);
-        undoButton.setBounds (plus.getRight() + 8, y, 22, 26);
-        homeButton.setBounds (undoButton.getRight() + 2, y, 22, 26);
-        slots.setBounds (getWidth() - slots.preferredWidth() - 10, y, slots.preferredWidth(), 26);
+        plus.setBounds ((int) end.getX() + 2, y, 26, 28);
+        undoButton.setBounds (plus.getRight() + 8, y, 24, 28);
+        homeButton.setBounds (undoButton.getRight() + 2, y, 24, 28);
+        slots.setBounds (getWidth() - slots.preferredWidth() - 10, y, slots.preferredWidth(), 28);
         text.setBounds (chipsArea().toNearestInt().withWidth (juce::jmax (220, slots.getX() - captionW - 30)));
     }
 
@@ -364,7 +364,7 @@ namespace tonnetz::ui
         const auto& k = ink();
         const auto row = chipsArea();
         g.setColour (k.textFaint);
-        g.setFont (Ink::ui (13.0f));
+        g.setFont (Ink::ui (14.0f));
         const int m = mode();
         g.drawText (m == (int) Mode::Orbit ? "cycle" : m == (int) Mode::Mirror ? "slot W" : "W",
                     juce::Rectangle<float> (8.0f, row.getY(), (float) captionW, row.getHeight()), juce::Justification::centredLeft, false);
@@ -397,7 +397,7 @@ namespace tonnetz::ui
         if (w.empty())
         {
             g.setColour (k.textFaint);
-            g.setFont (Ink::ui (13.0f));
+            g.setFont (Ink::ui (14.0f));
             g.drawText (m == (int) Mode::Orbit ? "(no cycle)" : utf8 ("none: the chord as played"), juce::Rectangle<float> ((float) homeButton.getRight() + 10.0f, row.getY(), 240.0f, row.getHeight()),
                         juce::Justification::centredLeft, false);
         }
@@ -413,8 +413,8 @@ namespace tonnetz::ui
         if (note.isNotEmpty())
         {
             g.setColour (noteIsError ? k.warn : k.textFaint);
-            g.setFont (Ink::ui (12.0f));
-            g.drawText (note, juce::Rectangle<float> (row.getX(), row.getBottom() + 1.0f, (float) getWidth() - row.getX(), 16.0f), juce::Justification::centredLeft, true);
+            g.setFont (Ink::ui (13.0f));
+            g.drawText (note, juce::Rectangle<float> (row.getX(), row.getBottom() + 1.0f, (float) getWidth() - row.getX(), 17.0f), juce::Justification::centredLeft, true);
         }
     }
 

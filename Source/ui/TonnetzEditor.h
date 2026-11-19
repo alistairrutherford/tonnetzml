@@ -27,7 +27,7 @@ namespace tonnetz
     {
     public:
         static constexpr int minWidth = 760, minHeight = 520;
-        static constexpr int headerHeight = 38;
+        static constexpr int headerHeight = 42;
 
         explicit TonnetzEditor (TonnetzProcessor&);
         ~TonnetzEditor() override;
@@ -73,6 +73,10 @@ namespace tonnetz
         void updateInfo (const juce::MouseEvent&);
 
         TonnetzProcessor& processor;
+        // First: the components below call back into the editor while they are built (the
+        // settings panel's layout), so these must be initialised before them.
+        uint32_t lastReleases = 0, seenViewRestores = 0;
+        bool haveReleases = false, constructed = false;
         ui::LatticeModel picture;
         ui::EditorNotes notes;
         ui::LatticeView lattice;
@@ -83,8 +87,6 @@ namespace tonnetz
         ui::Settings side;
         ui::InfoView info;
         juce::TooltipWindow tooltips { this, 600 };
-        uint32_t lastReleases = 0, seenViewRestores = 0;
-        bool haveReleases = false, constructed = false;
         int ticks = 0;
         double lastTick = 0.0;
 

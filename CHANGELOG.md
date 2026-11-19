@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **Bigger text throughout:** the header (modes, key, the sentence), the settings panel, the word
+  bar's chips and the op palette, the capture strip, the keyboard strip (its bar and the operator
+  keys' labels), the lattice's hints, tooltip and op labels, and the Info View are all larger
+  again (controls 15.5 pt, captions 14). Note names and ghost-op chips on the lattice have larger
+  minimum sizes, so they stay readable zoomed out. The strips are a few pixels taller to fit.
+
+### Fixed
+
+- **A crash opening the editor (1.0.2 and 1.0.3):** the settings panel asked the editor to lay
+  itself out while the editor was still being built, and the editor's guard against that could
+  read as set before it was initialised. It happened only now and then (it depends on what was
+  in memory), but could take the host down with it. The guard is initialised first, and the
+  panel no longer asks for a layout while it is constructed.
+- **Notes the editor forgot:** a chord clicked on the lattice or keyboard strip in the same audio
+  block as a reset (the host's first block, or a restored state) or a transport stop kept
+  sounding while the editor forgot it, so it couldn't be let go from the editor. Each editor note
+  is now numbered, and a release tells the editor which ones it actually ended; the rest stay
+  held.
+
 ## 1.0.3 (2026-11-19)
 
 ### Fixed

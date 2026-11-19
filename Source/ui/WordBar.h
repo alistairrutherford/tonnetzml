@@ -43,7 +43,7 @@ namespace tonnetz::ui
         OpPalette* palette() noexcept { return paletteView.get(); }
         juce::Rectangle<float> chipBounds (int index) const;
         HudChoices& slotChoices() noexcept { return slots; }
-        int preferredHeight() const { return 46; }
+        int preferredHeight() const { return 50; }
 
         void paint (juce::Graphics&) override;
         void resized() override;

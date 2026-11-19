@@ -49,8 +49,8 @@ namespace tonnetz::ui
 
     protected:
         const Ink& ink() const { return Ink::of (view.dark); }
-        juce::Font font() const { return Ink::ui (14.5f); }
-        juce::Font captionFont() const { return Ink::ui (13.0f); }
+        juce::Font font() const { return Ink::ui (15.5f); }
+        juce::Font captionFont() const { return Ink::ui (14.0f); }
         float captionWidth() const;
         void step (int delta, bool wrap);
 
@@ -214,8 +214,9 @@ namespace tonnetz::ui
         juce::OwnedArray<HudControl> owned;
         juce::Array<Line> lines;
         HudButton fold, reset;
+        bool built = false;            // no layout callbacks while it is being constructed
         int rowHeight() const;
         juce::Rectangle<int> content() const { return getLocalBounds().withTrimmedLeft (1).reduced (12, 8); }
-        static constexpr int maxRow = 24, minRow = 18, captionWidth = 66, gap = 10;
+        static constexpr int maxRow = 26, minRow = 20, captionWidth = 74, gap = 10;
     };
 }

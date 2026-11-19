@@ -15,7 +15,7 @@ namespace tonnetz::ui
     class InfoView final : public juce::Component
     {
     public:
-        static constexpr int stripHeight = 42;
+        static constexpr int stripHeight = 46;
 
         explicit InfoView (const bool& darkTheme) : dark (darkTheme) {}
 

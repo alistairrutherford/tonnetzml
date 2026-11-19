@@ -60,6 +60,7 @@ namespace tonnetz::ui
         bool ghostsClickable() const;
         std::optional<Triangle> heldTriangle() const { return held; }
         HudButton& releaseButton() noexcept { return release; }
+        bool isHoldingSet() const noexcept { return builtSet; }
 
         // Free ops on the generated chord (Phase 6): click one of its nodes to Pivot on it, the
         // middle of one of its edges to Flip through it, a node across an edge (marked +) to

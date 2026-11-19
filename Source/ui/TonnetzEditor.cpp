@@ -115,11 +115,15 @@ namespace tonnetz
         }
         else if (status.releases != lastReleases)
         {
-            // The engine let go of everything: it ignores the note-offs that would follow.
+            // The engine let go of everything it had been given: it ignores the note-offs that
+            // would follow. Notes the editor sent after that (the same block, or still queued)
+            // still sound, so they are kept.
             lastReleases = status.releases;
-            notes.forget();
-            lattice.forget();
-            keyboard.forget();
+            notes.forgetThrough (status.releasedThrough);
+            if (! notes.any (ui::EditorNotes::lattice))
+                lattice.forget();
+            if (! notes.any (ui::EditorNotes::mouseKeys))
+                keyboard.forget();
         }
 
         auto& state = processor.getState();
@@ -172,7 +176,7 @@ namespace tonnetz
     void TonnetzEditor::layoutFloating()
     {
         const auto lat = lattice.getBounds();
-        word.setBounds (lat.getX(), lat.getBottom() - 22 - word.preferredHeight(), lat.getWidth(), word.preferredHeight());
+        word.setBounds (lat.getX(), lat.getBottom() - 25 - word.preferredHeight(), lat.getWidth(), word.preferredHeight());
     }
 
     void TonnetzEditor::resized()

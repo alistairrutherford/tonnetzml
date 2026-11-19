@@ -32,6 +32,9 @@ namespace tonnetz
         uint8_t velocity = 0;      // NoteOn
         int8_t index = 0;          // Operator
         Word word;                 // SetWalk
+        uint32_t seq = 0;          // NoteOn, NoteOff: numbered by the processor as they are sent
+                                   // (TonnetzProcessor::sendEditorCommand), so a release can say
+                                   // which of the editor's notes it ended
 
         static EditorCommand noteOn (int note, int velocity) noexcept
         {

@@ -23,7 +23,7 @@ namespace tonnetz::ui
                 return;
             auto& o = owners[(size_t) note];
             if (o == 0)
-                processor.sendEditorCommand (EditorCommand::noteOn (note, velocity));
+                processor.sendEditorCommand (EditorCommand::noteOn (note, velocity), &pressSeq[(size_t) note]);
             o = (uint8_t) (o | h);
         }
 
@@ -59,6 +59,17 @@ namespace tonnetz::ui
         // would follow, so the editor just forgets.
         void forget() { owners.fill (0); }
 
+        // The engine let go of everything up to editor note `through` (EngineStatus::
+        // releasedThrough): forgets the notes pressed then or before. A note pressed after it
+        // (it reached the engine after the release, or is still queued) still sounds and is
+        // kept, so its release is still sent. (A press the queue refused, seq 0, is forgotten.)
+        void forgetThrough (uint32_t through)
+        {
+            for (size_t n = 0; n < owners.size(); ++n)
+                if (owners[n] != 0 && (pressSeq[n] == 0 || (int32_t) (pressSeq[n] - through) <= 0))
+                    owners[n] = 0;
+        }
+
         bool holds (int note, Holder h) const noexcept { return note >= 0 && note < 128 && (owners[(size_t) note] & h) != 0; }
         bool holds (int note) const noexcept { return note >= 0 && note < 128 && owners[(size_t) note] != 0; }
         bool any (Holder h) const noexcept
@@ -72,5 +83,6 @@ namespace tonnetz::ui
     private:
         TonnetzProcessor& processor;
         std::array<uint8_t, 128> owners {};
+        std::array<uint32_t, 128> pressSeq {};       // the seq of each held note's note-on
     };
 }

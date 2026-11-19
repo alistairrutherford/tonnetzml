@@ -211,6 +211,7 @@ namespace tonnetz
         engineIn.clear();
         engineOut.clear();
         merged.clear();
+        const uint32_t releasesAtStart = engine.releases();
         if (numSamples > 0 && resetRequested.exchange (false))
         {
             rig.releaseAll (0, rigEvents);
@@ -225,6 +226,7 @@ namespace tonnetz
             engine.restore (restore.state, engineOut);
             walkTaken.store (restore.seq);
         }
+        const uint32_t releasesBeforeProcess = engine.releases();     // a reset or restore: before every key this block
         rig.generate (rigKeysForAudio.read(), rigOn, transport, numSamples, rigEvents);
 
         for (const auto meta : midi)
@@ -253,8 +255,9 @@ namespace tonnetz
         {
             if (c->type == EditorCommandType::NoteOn || c->type == EditorCommandType::NoteOff)
             {
-                if (editorNotes >= numSamples || engineIn.space() < 2)
+                if (editorNotes >= numSamples || editorNotes >= (int) editorSeqAt.size() || engineIn.space() < 2)
                     break;                       // the rest next block
+                editorSeqAt[(size_t) editorNotes] = c->seq;
                 engineIn.push (c->type == EditorCommandType::NoteOn ? MidiEvent::noteOn (0, c->note, c->velocity, editorNotes)
                                                                     : MidiEvent::noteOff (0, c->note, editorNotes));
                 ++editorNotes;
@@ -367,6 +370,20 @@ namespace tonnetz
         status.source = engine.sourceChord();
         status.generated = engine.generatedChord();
         status.releases = engine.releases();
+        // Which of the editor's notes the release ended: those given to the engine before it
+        // (earlier blocks, and this block's at samples before it; one at the release's sample
+        // comes after it in the block's order). A reset or restore before the block's keys ends
+        // none of this block's.
+        if (engine.releases() != releasesAtStart)
+        {
+            const int at = engine.releases() != releasesBeforeProcess ? engine.lastReleaseSample() : -1;
+            uint32_t through = editorSeqTaken;
+            for (int i = 0; i < editorNotes && i < at; ++i)
+                through = editorSeqAt[(size_t) i];
+            status.releasedThrough = through;
+        }
+        if (editorNotes > 0)
+            editorSeqTaken = editorSeqAt[(size_t) (editorNotes - 1)];
         statusForMessage.publish (status);
     }
 

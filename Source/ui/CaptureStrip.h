@@ -23,8 +23,8 @@ namespace tonnetz::ui
     class CaptureStrip final : public juce::Component
     {
     public:
-        static constexpr int stripHeight = 52;
-        static constexpr float glyphWidth = 40.0f;
+        static constexpr int stripHeight = 58;
+        static constexpr float glyphWidth = 46.0f;
 
         CaptureStrip (TonnetzProcessor&, const LatticeModel&, LatticeView&, EditorNotes&);
 

@@ -24,8 +24,8 @@ namespace tonnetz::ui
               if (v.follow)
                   followChords (false);
               repaint();
-          }, 13.0f),
-          release (p.editorView(), "release", [this] { releaseLattice(); if (onLetGo) onLetGo(); repaint(); }, 13.0f)
+          }, 14.0f),
+          release (p.editorView(), "release", [this] { releaseLattice(); if (onLetGo) onLetGo(); repaint(); }, 14.0f)
     {
         setOpaque (true);
         follow.setComponentID ("ui.follow");
@@ -36,8 +36,8 @@ namespace tonnetz::ui
         targetB = p.editorView().centreB;
     }
 
-    double LatticeView::nodeRadius() const { return juce::jlimit (8.5, 26.0, geo.spacing() * 0.19); }
-    double LatticeView::chipRadius() const { return juce::jlimit (8.0, 16.0, geo.spacing() * 0.15); }
+    double LatticeView::nodeRadius() const { return juce::jlimit (10.5, 27.0, geo.spacing() * 0.2); }
+    double LatticeView::chipRadius() const { return juce::jlimit (10.5, 18.0, geo.spacing() * 0.17); }
 
     void LatticeView::updateGeometry()
     {
@@ -52,9 +52,9 @@ namespace tonnetz::ui
     void LatticeView::resized()
     {
         updateGeometry();
-        const int y = getHeight() - 22;
-        follow.setBounds (getWidth() - 82, y, 78, 20);
-        release.setBounds (getWidth() - 82 - 68, y, 64, 20);
+        const int y = getHeight() - 24;
+        follow.setBounds (getWidth() - 88, y, 84, 22);
+        release.setBounds (getWidth() - 88 - 72, y, 68, 22);
     }
 
     //==========================================================================
@@ -540,7 +540,7 @@ namespace tonnetz::ui
                 juce::PathStrokeType (hot ? 2.2f : 1.3f).createDashedStroke (dashed, ring, dashes, 2);
                 g.setColour (k.generated.withAlpha (hot ? 1.0f : 0.55f));
                 g.fillPath (dashed);
-                g.setFont (Ink::ui (11.0f, true));
+                g.setFont (Ink::ui (12.5f, true));
                 g.drawText ("+", juce::Rectangle<float> (12.0f, 12.0f).withCentre (c + juce::Point<float> (r * 0.9f, -r * 0.9f)), juce::Justification::centred, false);
             }
             else if (hot && lo.kind == LatticeOp::flip)
@@ -1046,7 +1046,7 @@ namespace tonnetz::ui
             return;
         // W op by op: an arrow from each chord's centre to the next, labelled with its op.
         juce::Point<float> from = screen (model.source.a, model.source.b);
-        g.setFont (Ink::ui (12.0f, true));
+        g.setFont (Ink::ui (13.5f, true));
         const int n = (int) model.path.size();
         for (int i = 0; i < n; ++i)
         {
@@ -1127,7 +1127,7 @@ namespace tonnetz::ui
             g.setColour ((hot ? k.generated : k.ghost).withAlpha (alpha));
             g.drawEllipse (chip, hot ? 2.2f : 1.4f);
             g.setColour ((solid ? k.onInk : (hot ? k.generated : k.text)).withAlpha (alpha));
-            g.setFont (Ink::ui (gh.label.length() > 2 ? cr * 0.78f : cr * 1.02f, true));
+            g.setFont (Ink::ui (gh.label.length() > 2 ? cr * 0.84f : cr * 1.06f, true));
             g.drawText (gh.label, chip.expanded (4.0f, 0.0f), juce::Justification::centred, false);
             if (! gh.available)
             {
@@ -1142,9 +1142,9 @@ namespace tonnetz::ui
         const auto& k = ink();
         if (! hovering || tip.isEmpty())
             return;
-        const auto f = Ink::ui (13.5f, hoverGhost >= 0);
+        const auto f = Ink::ui (14.5f, hoverGhost >= 0);
         const float w = juce::GlyphArrangement::getStringWidth (f, tip) + 14.0f;
-        auto r = juce::Rectangle<float> (w, 22.0f).withPosition (hoverAt + juce::Point<float> (14.0f, 12.0f));
+        auto r = juce::Rectangle<float> (w, 24.0f).withPosition (hoverAt + juce::Point<float> (14.0f, 12.0f));
         if (r.getRight() > getWidth() - 4) r.setX (hoverAt.x - w - 10.0f);
         if (r.getBottom() > getHeight() - 24) r.setY (hoverAt.y - 32.0f);
         g.setColour (k.wash);
@@ -1173,19 +1173,19 @@ namespace tonnetz::ui
 
         // The foot of the page fades to paper, so the word bar and the hints read clearly.
         {
-            const float top = (float) getHeight() - 92.0f;
+            const float top = (float) getHeight() - 100.0f;
             juce::ColourGradient fade (k.ground.withAlpha (0.0f), 0.0f, top, k.ground.withAlpha (0.93f), 0.0f, top + 52.0f, false);
             g.setGradientFill (fade);
-            g.fillRect (0.0f, top, (float) getWidth(), 92.0f);
+            g.fillRect (0.0f, top, (float) getWidth(), 100.0f);
         }
 
         // The bottom line: how to play it, Follow, Release.
         follow.setText (utf8 (processor.editorView().follow ? "\xe2\x97\x8f follow" : "\xe2\x97\x8b follow"));
         release.setEnabled (notes.any (EditorNotes::lattice));
-        g.setFont (Ink::ui (12.5f));
+        g.setFont (Ink::ui (13.5f));
         g.setColour (k.textFaint);
         g.drawText (utf8 ("click a triangle \xc2\xb7 drag to glide \xc2\xb7 shift-click notes \xc2\xb7 right-drag pans \xc2\xb7 scroll zooms \xc2\xb7 double-click recentres"),
-                    juce::Rectangle<int> (12, getHeight() - 22, getWidth() - 170, 20), juce::Justification::centredLeft, true);
+                    juce::Rectangle<int> (12, getHeight() - 24, getWidth() - 180, 22), juce::Justification::centredLeft, true);
         drawTip (g);
     }
 }
