@@ -27,16 +27,12 @@ namespace tonnetz::ui
                   notes.releaseHolder (EditorNotes::mouseKeys);
               refresh();
           }, 14.0f),
-          release (p.editorView(), "release", [this] { notes.releaseHolder (EditorNotes::mouseKeys); refresh(); }, 14.0f),
-          octaveDown (p.editorView(), utf8 ("\xe2\x80\xb9"), [this] { auto& v = processor.editorView(); v.computerOctave = juce::jmax (1, v.computerOctave - 1); refresh(); }, 15.0f),
-          octaveUp (p.editorView(), utf8 ("\xe2\x80\xba"), [this] { auto& v = processor.editorView(); v.computerOctave = juce::jmin (8, v.computerOctave + 1); refresh(); }, 15.0f)
+          release (p.editorView(), "release", [this] { notes.releaseHolder (EditorNotes::mouseKeys); refresh(); }, 14.0f)
     {
         setOpaque (true);
         sticky.setComponentID ("ui.sticky");
         release.setComponentID ("ui.keysRelease");
-        octaveDown.setComponentID ("ui.octave");
-        octaveUp.setComponentID ("ui.octave");
-        for (auto* b : { &sticky, &release, &octaveDown, &octaveUp })
+        for (auto* b : { &sticky, &release })
             addAndMakeVisible (b);
         refresh();
     }
@@ -67,9 +63,6 @@ namespace tonnetz::ui
         sticky.setBounds (bar.removeFromLeft (sticky.preferredWidth() + 6));
         bar.removeFromLeft (6);
         release.setBounds (bar.removeFromLeft (release.preferredWidth() + 6));
-        octaveUp.setBounds (bar.removeFromRight (18));
-        bar.removeFromRight (48);
-        octaveDown.setBounds (bar.removeFromRight (18));
         scroll = juce::jlimit (0.0f, juce::jmax (0.0f, whiteWidth() * 52.0f - (float) getWidth()), scroll);
     }
 
@@ -170,7 +163,10 @@ namespace tonnetz::ui
         const auto c = (char) juce::CharacterFunctions::toLowerCase (k.getTextCharacter());
         if (c == '-' || c == '=')
         {
-            (c == '-' ? octaveDown : octaveUp).click();
+            // No buttons for this: - and = move the computer keyboard's two octaves down or up.
+            auto& v = processor.editorView();
+            v.computerOctave = juce::jlimit (1, 8, v.computerOctave + (c == '-' ? -1 : 1));
+            refresh();
             return true;
         }
         return c != 0 && std::strchr (computerKeys, c) != nullptr;
@@ -203,13 +199,11 @@ namespace tonnetz::ui
     {
         const auto& k = ink();
         g.fillAll (k.ground);
-        // The bar: a caption, Sticky, Release, the computer keyboard's octave.
+        // The bar: a caption, Sticky, Release.
         g.setColour (k.textFaint);
         g.setFont (Ink::ui (14.0f));
         g.drawText ("keyboard", juce::Rectangle<int> (8, 0, 76, barHeight), juce::Justification::centredLeft, false);
         const int oct = processor.editorView().computerOctave;
-        g.drawText (utf8 ("\xe2\x8c\xa8 ") + keyName (12 * oct), juce::Rectangle<int> (octaveDown.getRight(), 0, octaveUp.getX() - octaveDown.getRight(), barHeight),
-                    juce::Justification::centred, false);
 
         const auto zone = processor.getState().getRawParameterValue (params::opZoneOn)->load() > 0.5f;
         const int zoneStart = (int) std::lround (processor.getState().getRawParameterValue (params::opZoneStart)->load());

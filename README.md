@@ -67,7 +67,8 @@ hovering a ghost neighbour auditions it.
   the sixteenth grid); **save…** writes one; **reset** forgets the capture and the lattice's red
   trail (an armed take carries on, empty).
 - **The keyboard strip** shows both inks and the operator zone; click to play (*sticky* holds keys
-  until clicked again), or use the computer keyboard (Z… and Q… rows, ‹ › for the octave).
+  until clicked again), or use the computer keyboard (Z… and Q… rows; **-** and **=** shift them
+  an octave, with no control on screen).
 - **The settings panel**, docked to the right of the lattice: the other settings as click-to-cycle
   labels, a group to a line. **›** folds it to a slim edge (**‹** opens it), and **reset** puts every
   setting in it back to its default (Mode, Key, Slot and the slots' words stay). Both resets ask

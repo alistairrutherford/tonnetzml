@@ -379,7 +379,8 @@ generated chord (common tones kept). Shift-click on nodes still builds sets.
 **Keyboard strip.** Full width, 88 keys, scrollable. Shows source and generated notes in the two
 inks and tints the operator zone, with each operator key labelled. Click to play; **Sticky**
 (default on for the mouse) holds clicked keys so a chord can be built one key at a time, with a
-*Release* button; the computer keyboard plays a two-octave window.
+*Release* button; the computer keyboard plays a two-octave window. *As built (after 1.0.4):* no
+on-screen octave control; - and = move the window, and its octave is still saved with the view.
 
 **Mechanics.** Plain `juce::Graphics` vector drawing, repainting only the lattice layer that
 changed, on a 60 Hz timer fed by the snapshot. Resizable from 760 × 520 with no fixed layout
@@ -457,7 +458,7 @@ a bold title run into a line or two of text: what it does and what its settings 
 the hint "Point at anything to see what it does." No panel: a rule above it, ink on the page,
 in both themes. One table in `InfoView.cpp` keyed by component ID: each parameter's control
 (its ID is the parameter's), `ui.…` for the buttons that aren't parameters (theme, Follow,
-Release ×2, settings ▴, +, ⌫, ⌂, ⇩ drag MIDI, save…, sticky, ‹ ›), `area.…` for the header's
+Release ×2, settings ▴, +, ⌫, ⌂, ⇩ drag MIDI, save…, sticky), `area.…` for the header's
 sentence, the lattice, the word bar, the op palette, the capture strip and the keyboard. The
 editor listens to every child's mouse moves and finds the innermost described component under
 the pointer (`TonnetzEditor::infoKeyAt`); in the settings column a caption or a gap stands for

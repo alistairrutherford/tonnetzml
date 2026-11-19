@@ -3,7 +3,7 @@
 // (a key in both carries both), the operator zone tinted with each key's op written on it.
 // Click to play (lower on the key is louder); with Sticky on (the default) a clicked key stays
 // down until it is clicked again or Release; the computer keyboard plays a two-octave window
-// (Z..M and Q..U rows, from the octave shown; ‹ › move it).
+// (Z..M and Q..U rows, from C3 at first; - and = move it, with no control on screen).
 #pragma once
 
 #include "EditorNotes.h"
@@ -49,7 +49,7 @@ namespace tonnetz::ui
         TonnetzProcessor& processor;
         const LatticeModel& model;
         EditorNotes& notes;
-        HudButton sticky, release, octaveDown, octaveUp;
+        HudButton sticky, release;
         float scroll = 0.0f;                                 // pixels the keys are moved left
         int mouseNote = -1;                                  // non-sticky: the key under the button
         bool mouseDownSticky = false;

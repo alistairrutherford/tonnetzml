@@ -91,13 +91,11 @@ namespace tonnetz::ui
 
             // ---- The keyboard -----------------------------------------------------------------
             { "area.keyboard", "Keyboard",
-              "Click to play (lower on a key is louder). Teal: notes played, vermilion: notes made. The tinted keys are the "
-              "operator keys." },
+              "Click to play (lower is louder). Teal: played, vermilion: made, tinted: operator keys. Z to M and Q to U "
+              "play two octaves; - and = shift them." },
             { "ui.sticky", "Sticky",
               "On: clicked keys and triangles stay down until clicked again or Release, so a chord can be built a key at a time." },
             { "ui.keysRelease", "Release", "Lets go of every key held by a click." },
-            { "ui.octave", "Computer keyboard",
-              "Moves the two octaves the computer keyboard plays (the Z to M and Q to U rows) down or up." },
         };
 
         const Info* find (const juce::String& key)

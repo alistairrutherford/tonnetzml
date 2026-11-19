@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **No octave control on the keyboard strip:** the ‹ › buttons and the ⌨ C3 readout are gone.
+  The computer keyboard still plays two octaves (Z… and Q… rows); press **-** or **=** to move
+  them down or up when you need to. The octave is still saved with the view.
+
 ## 1.0.4 (2026-11-19)
 
 ### Changed
